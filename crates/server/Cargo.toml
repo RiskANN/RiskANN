@@ -1,0 +1,12 @@
+[package]
+name = "server"
+version = "1.0.0"
+edition = "2024"
+
+[dependencies]
+engine = { path = "../engine" }
+axum = "0.7"
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+dotenvy = { workspace = true }

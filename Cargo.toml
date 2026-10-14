@@ -1,6 +1,17 @@
-[package]
-name = "RiskANN"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = [
+    "crates/core",
+    "crates/storage",
+    "crates/engine",
+    "crates/server",
+]
+resolver = "2"
 
-[dependencies]
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.40", features = ["full"] }
+dashmap = "6.0"
+bytemuck = { version = "1.18", features = ["derive"] }
+memmap2 = "0.9"
+dotenvy = "0.15"

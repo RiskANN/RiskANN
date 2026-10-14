@@ -1,0 +1,13 @@
+[package]
+name = "engine"
+version = "1.0.0"
+edition = "2024"
+
+[dependencies]
+storage = { path = "../storage" }
+core = { path = "../core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+dashmap = { workspace = true }
+tokio = { workspace = true }
+

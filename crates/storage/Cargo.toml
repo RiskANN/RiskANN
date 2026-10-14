@@ -1,0 +1,8 @@
+[package]
+name = "storage"
+version = "1.0.0"
+edition = "2024"
+
+[dependencies]
+memmap2 = { workspace = true }
+bytemuck = { workspace = true }
