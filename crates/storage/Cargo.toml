@@ -2,6 +2,9 @@
 name = "storage"
 version = "1.0.0"
 edition = "2024"
+rust-version = "1.85"
+description = "RiskANN memory-mapped vector and adjacency storage."
+license = "MIT"
 
 [dependencies]
 memmap2 = { workspace = true }
