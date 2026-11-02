@@ -1,0 +1,1539 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RiskANN Console</title>
+<style>
+:root {
+  --bg: #eef1f5; --surface: #ffffff; --surface-2: #e4e9f0; --ink: #18202d; --ink-2: #4b5768;
+  --line: #ccd4de; --edge: #b3bfcd; --accent: #2f5bea; --accent-ink: #ffffff;
+  --beam: #d98e00; --hit: #0f8f6f; --truth: #7a4fd6; --miss: #d2463c; --ok: #0f8f6f;
+  --sans: "Avenir Next", Avenir, "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", system-ui, sans-serif;
+  --mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1520; --surface: #151f2d; --surface-2: #1c2838; --ink: #e5ebf3; --ink-2: #9aa8ba;
+    --line: #2a3a50; --edge: #3a4c64; --accent: #7ea2ff; --accent-ink: #0e1520;
+    --beam: #ffb82e; --hit: #3ccb9f; --truth: #b193ff; --miss: #ff6b5e; --ok: #3ccb9f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1520; --surface: #151f2d; --surface-2: #1c2838; --ink: #e5ebf3; --ink-2: #9aa8ba;
+  --line: #2a3a50; --edge: #3a4c64; --accent: #7ea2ff; --accent-ink: #0e1520;
+  --beam: #ffb82e; --hit: #3ccb9f; --truth: #b193ff; --miss: #ff6b5e; --ok: #3ccb9f;
+  color-scheme: dark;
+}
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+*, *::before, *::after { box-sizing: inherit; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1, h2, h3 { margin: 0; line-height: 1.2; }
+h2 { font-size: 1.45rem; font-weight: 650; letter-spacing: -0.01em; }
+h3 { font-size: 1rem; font-weight: 650; }
+p { margin: 0 0 .6em; max-width: 72ch; }
+code, pre, .mono { font-family: var(--mono); font-size: .82rem; }
+.muted { color: var(--ink-2); }
+
+.top { display: flex; align-items: center; gap: 1rem; padding: .8rem 1.25rem; border-bottom: 1px solid var(--line); background: var(--surface); flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: .6rem; }
+.brand h1 { font-size: 1.15rem; font-weight: 700; }
+.brand span { color: var(--ink-2); font-size: .9rem; }
+.mode { margin-left: auto; display: flex; align-items: center; gap: .5rem; font-size: .88rem; }
+.pill { display: inline-flex; align-items: center; gap: .45rem; padding: .25rem .7rem; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); }
+.pill i { width: .55rem; height: .55rem; border-radius: 50%; background: var(--beam); display: inline-block; }
+.pill.live i { background: var(--ok); }
+
+.shell { display: grid; grid-template-columns: 196px minmax(0, 1fr); min-height: calc(100% - 60px); }
+.rail { border-right: 1px solid var(--line); padding: 1rem .6rem; display: flex; flex-direction: column; gap: .15rem; background: var(--surface); }
+.rail a { display: block; padding: .5rem .75rem; border-radius: 8px; color: var(--ink-2); text-decoration: none; font-weight: 550; }
+.rail a:hover { background: var(--surface-2); color: var(--ink); }
+.rail a[aria-current="page"] { background: var(--ink); color: var(--surface); }
+.rail .sep { height: 1px; background: var(--line); margin: .6rem .4rem; }
+main { padding: 1.25rem; min-width: 0; }
+.view { display: none; }
+.view.on { display: block; }
+.view > header { margin-bottom: 1rem; }
+.view > header p { color: var(--ink-2); margin-top: .35rem; }
+
+.grid3 { display: grid; grid-template-columns: 250px minmax(0, 1fr) 300px; gap: 1rem; align-items: start; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: .9rem 1rem; min-width: 0; }
+.panel + .panel { margin-top: 1rem; }
+.panel h3 { margin-bottom: .6rem; }
+.field { display: grid; gap: .2rem; margin-bottom: .6rem; font-size: .88rem; }
+.field label { color: var(--ink-2); }
+.row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+input[type=text], input[type=number], select, textarea { width: 100%; padding: .4rem .55rem; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+textarea { font-family: var(--mono); font-size: .8rem; min-height: 180px; resize: vertical; }
+.btn { padding: .45rem .9rem; border-radius: 7px; border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; font-weight: 600; }
+.btn:hover { border-color: var(--ink-2); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.canvas-wrap { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.canvas-wrap canvas { display: block; width: 100%; height: 560px; cursor: crosshair; }
+.canvas-wrap .overlay { position: absolute; left: .8rem; bottom: .7rem; right: .8rem; font-size: .85rem; background: color-mix(in srgb, var(--surface) 88%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: .45rem .7rem; }
+.legend { display: grid; grid-template-columns: auto 1fr; gap: .25rem .6rem; font-size: .84rem; align-items: center; }
+.sw { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
+.stats { display: grid; grid-template-columns: 1fr auto; gap: .15rem .8rem; font-size: .88rem; }
+.stats b { font-variant-numeric: tabular-nums; text-align: right; }
+.big { font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+th, td { text-align: left; padding: .3rem .45rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--ink-2); font-weight: 600; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.scroll { overflow: auto; max-height: 420px; }
+.tag { display: inline-block; padding: 0 .45rem; border-radius: 5px; font-size: .78rem; font-weight: 650; background: var(--surface-2); }
+.tag.ok { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
+.tag.bad { background: color-mix(in srgb, var(--miss) 18%, transparent); color: var(--miss); }
+.tag.warn { background: color-mix(in srgb, var(--beam) 22%, transparent); color: var(--beam); }
+.narr { font-size: .9rem; min-height: 4.5em; }
+.steps { list-style: none; padding: 0; margin: 0; counter-reset: s; }
+.steps li { counter-increment: s; padding: .45rem .6rem .45rem 2.2rem; position: relative; border-radius: 7px; font-size: .9rem; }
+.steps li::before { content: counter(s); position: absolute; left: .6rem; top: .45rem; width: 1.2rem; height: 1.2rem; border-radius: 50%; background: var(--surface-2); text-align: center; font-size: .75rem; line-height: 1.2rem; font-weight: 700; }
+.steps li.on { background: color-mix(in srgb, var(--beam) 16%, transparent); }
+.steps li.on::before { background: var(--beam); color: #111; }
+pre.json { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: .6rem; margin: 0; overflow: auto; max-height: 360px; white-space: pre-wrap; word-break: break-word; }
+.log { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .6rem; height: 340px; overflow: auto; font-family: var(--mono); font-size: .76rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+.log .ERROR { color: var(--miss); } .log .WARN { color: var(--beam); } .log .DEBUG, .log .TRACE { color: var(--ink-2); }
+.progress { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.progress > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.chart svg { width: 100%; height: auto; display: block; }
+.slots { width: 100%; height: 260px; display: block; cursor: pointer; }
+.notice { border-left: 3px solid var(--beam); padding: .5rem .8rem; background: color-mix(in srgb, var(--beam) 10%, transparent); border-radius: 0 8px 8px 0; font-size: .88rem; margin-bottom: 1rem; }
+.testlist .t { display: grid; grid-template-columns: 4.2rem 1fr auto; gap: .5rem; padding: .3rem .2rem; border-bottom: 1px solid var(--line); font-size: .86rem; }
+.testlist .g { font-weight: 650; margin: .8rem 0 .2rem; }
+.arch svg { width: 100%; height: auto; }
+.arch .box rect { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.arch .box text { fill: var(--ink); font: 600 14px var(--sans); }
+.arch .box .sub { fill: var(--ink-2); font: 400 12px var(--sans); }
+.arch .box { cursor: pointer; }
+.arch .box.on rect { stroke: var(--beam); stroke-width: 3; }
+.arch .wire { stroke: var(--edge); stroke-width: 2; fill: none; marker-end: url(#arrow); }
+.sm-states rect { fill: var(--surface-2); stroke: var(--line); }
+.sm-states .on rect { fill: color-mix(in srgb, var(--beam) 30%, var(--surface)); stroke: var(--beam); stroke-width: 2; }
+.sm-states .done rect { fill: color-mix(in srgb, var(--ok) 25%, var(--surface)); stroke: var(--ok); }
+.sm-states .fail rect { fill: color-mix(in srgb, var(--miss) 25%, var(--surface)); stroke: var(--miss); }
+.sm-states text { fill: var(--ink); font: 600 13px var(--sans); }
+.req { cursor: pointer; }
+.req:hover td { background: var(--surface-2); }
+.req.sel td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+
+@media (max-width: 1180px) { .grid3 { grid-template-columns: 1fr; } .canvas-wrap canvas { height: 420px; } }
+@media (max-width: 760px) {
+  .shell { grid-template-columns: 1fr; }
+  .rail { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: .5rem; }
+  .rail a { white-space: nowrap; }
+  .rail .sep { display: none; }
+  .grid2 { grid-template-columns: 1fr; }
+  main { padding: .8rem; }
+  .canvas-wrap canvas { height: 340px; }
+}
+@media (prefers-reduced-motion: reduce) { .progress > i { transition: none; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><h1>RiskANN Console</h1><span>Vamana-inspired vector search, made visible</span></div>
+  <div class="mode">
+    <span id="modePill" class="pill"><i></i><span id="modeText">Starting…</span></span>
+    <button id="modeSwitch" class="btn" hidden>Switch</button>
+  </div>
+</header>
+<div class="shell">
+  <nav class="rail" aria-label="Sections">
+    <a href="#explore">Explore the graph</a>
+    <a href="#build">How the graph is built</a>
+    <a href="#measure">Measure recall</a>
+    <a href="#ingest">Ingest a file</a>
+    <a href="#storage">Storage files</a>
+    <div class="sep"></div>
+    <a href="#tests">Run tests</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#requests">Requests and logs</a>
+  </nav>
+  <main>
+    <div id="simNotice" class="notice" hidden>
+      This page is running on an in-browser simulation: a JavaScript port of the RiskANN algorithms (beam search, RobustPrune, Vamana insertion, exact search) behind the same HTTP API. Run the Rust server and open <code>http://localhost:3000/ui</code> to drive the real system with this same console. Timings shown in simulation are JavaScript timings, not RiskANN performance.
+    </div>
+
+    <!-- EXPLORE -->
+    <section class="view" id="view-explore">
+      <header><h2>Explore the graph</h2><p>Every dot is a stored vector and every line is a graph edge. Click anywhere to place a query, then watch the beam search walk from the entry point towards it. Approximate results are ringed in teal; the exact answer is dashed violet.</p></header>
+      <div class="grid3">
+        <div>
+          <div class="panel">
+            <h3>Collection</h3>
+            <div class="field"><label for="exColl">Collection</label><select id="exColl"></select></div>
+            <div class="row"><button class="btn" id="exReload">Reload graph</button></div>
+            <p class="muted" id="exInfo" style="margin-top:.6rem;font-size:.85rem"></p>
+          </div>
+          <div class="panel">
+            <h3>Create a demo collection</h3>
+            <div class="field"><label for="exN">Points</label><input id="exN" type="number" value="400" min="10" max="3000"></div>
+            <div class="field"><label for="exDist">Distribution</label><select id="exDist"><option value="clustered:8">Clustered (8 clusters)</option><option value="gaussian">Gaussian</option><option value="uniform">Uniform</option></select></div>
+            <div class="field"><label for="exR">Degree r: <b id="exRv">12</b></label><input id="exR" type="range" min="2" max="32" value="12"></div>
+            <div class="field"><label for="exSeed">Seed</label><input id="exSeed" type="number" value="7"></div>
+            <button class="btn primary" id="exCreate">Create and load</button>
+            <div class="progress" style="margin-top:.6rem"><i id="exProg"></i></div>
+          </div>
+        </div>
+        <div>
+          <div class="canvas-wrap"><canvas id="exCanvas" aria-label="Graph view: click to search"></canvas><div class="overlay" id="exNarr">Loading…</div></div>
+          <div class="panel" style="margin-top:1rem">
+            <div class="row">
+              <div style="flex:1;min-width:150px" class="field"><label for="exK">k: <b id="exKv">5</b></label><input id="exK" type="range" min="1" max="30" value="5"></div>
+              <div style="flex:1;min-width:150px" class="field"><label for="exEf">ef_search: <b id="exEfv">16</b></label><input id="exEf" type="range" min="1" max="200" value="16"></div>
+              <div style="flex:1;min-width:150px" class="field"><label for="exSpeed">Animation speed</label><input id="exSpeed" type="range" min="1" max="10" value="6"></div>
+            </div>
+            <div class="row">
+              <button class="btn primary" id="exPlay">Replay search</button>
+              <button class="btn" id="exStep">Step</button>
+              <button class="btn" id="exSkip">Show final result</button>
+              <label class="row" style="gap:.3rem"><input type="checkbox" id="exEdges" checked> Edges</label>
+              <label class="row" style="gap:.3rem"><input type="checkbox" id="exExact" checked> Exact answer</label>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="panel">
+            <h3>Recall@k for this query</h3>
+            <div class="big" id="exRecall">–</div>
+            <p class="muted" id="exRecallNote" style="font-size:.85rem;margin-top:.3rem"></p>
+            <div class="stats" id="exStats"></div>
+          </div>
+          <div class="panel">
+            <h3>Results</h3>
+            <div class="scroll" style="max-height:260px"><table><thead><tr><th>#</th><th>id</th><th class="num">distance</th><th>exact?</th></tr></thead><tbody id="exResults"></tbody></table></div>
+          </div>
+          <div class="panel">
+            <h3>Legend</h3>
+            <div class="legend">
+              <span class="sw" style="background:var(--miss)"></span><span>Entry points (every search starts from all of them; the largest is the medoid)</span>
+              <span class="sw" style="background:var(--beam)"></span><span>Expanded by the beam search</span>
+              <span class="sw" style="border:2px solid var(--beam)"></span><span>Reached (distance computed)</span>
+              <span class="sw" style="border:3px solid var(--hit)"></span><span>Returned result</span>
+              <span class="sw" style="border:2px dashed var(--truth)"></span><span>Exact nearest neighbour</span>
+              <span class="sw" style="background:var(--ink)"></span><span>Query</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BUILD -->
+    <section class="view" id="view-build">
+      <header><h2>How the graph is built</h2><p>Insert points one at a time and see each step of Vamana insertion: the beam search for the new point, RobustPrune choosing diverse neighbours, and reverse edges added to those neighbours. This view always runs the JavaScript port locally, with the same rules as the Rust engine.</p></header>
+      <div class="grid3">
+        <div>
+          <div class="panel">
+            <h3>Parameters</h3>
+            <div class="field"><label for="bN">Points: <b id="bNv">50</b></label><input id="bN" type="range" min="10" max="200" value="50"></div>
+            <div class="field"><label for="bR">Degree r: <b id="bRv">4</b></label><input id="bR" type="range" min="2" max="12" value="4"></div>
+            <div class="field"><label for="bA">alpha: <b id="bAv">1.2</b></label><input id="bA" type="range" min="1" max="2" step="0.05" value="1.2"></div>
+            <div class="field"><label for="bL">l_build: <b id="bLv">16</b></label><input id="bL" type="range" min="2" max="64" value="16"></div>
+            <div class="field"><label for="bMode">Mode</label><select id="bMode"><option value="inc">Incremental (each point inserted as it arrives)</option><option value="bulk">Bulk (store all, choose entry point, then link)</option></select></div>
+            <div class="field"><label for="bSeed">Seed</label><input id="bSeed" type="number" value="3"></div>
+            <div class="row"><button class="btn" id="bReset">Reset</button><button class="btn primary" id="bNext">Insert next</button><button class="btn" id="bAuto">Play</button></div>
+          </div>
+        </div>
+        <div><div class="canvas-wrap"><canvas id="bCanvas" aria-label="Graph construction view"></canvas><div class="overlay" id="bNarr"></div></div></div>
+        <div>
+          <div class="panel"><h3>This step</h3><div class="narr" id="bDetail"></div></div>
+          <div class="panel">
+            <h3>Legend</h3>
+            <div class="legend">
+              <span class="sw" style="background:var(--ink)"></span><span>Point being inserted</span>
+              <span class="sw" style="border:2px solid var(--beam)"></span><span>Reached by its beam search</span>
+              <span class="sw" style="background:var(--hit)"></span><span>Edge kept by RobustPrune</span>
+              <span class="sw" style="background:var(--edge)"></span><span>Candidate pruned (covered by a kept edge)</span>
+              <span class="sw" style="background:var(--beam)"></span><span>Reverse edge added to a neighbour</span>
+              <span class="sw" style="background:var(--truth)"></span><span>Neighbour list re-pruned (degree &gt; r)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MEASURE -->
+    <section class="view" id="view-measure">
+      <header><h2>Measure recall</h2><p>Recall@k compares approximate results with the exact answer for many queries. Sweeping <code>ef_search</code> shows the trade-off: more exploration, higher recall, more work.</p></header>
+      <div class="grid2">
+        <div class="panel">
+          <h3>Setup</h3>
+          <div id="mSimFields">
+            <div class="row">
+              <div class="field" style="flex:1"><label for="mN">Vectors</label><input id="mN" type="number" value="2000"></div>
+              <div class="field" style="flex:1"><label for="mDim">Dimension</label><input id="mDim" type="number" value="16"></div>
+              <div class="field" style="flex:1"><label for="mMetric">Metric</label><select id="mMetric"><option>L2</option><option>COSINE</option></select></div>
+            </div>
+            <div class="row">
+              <div class="field" style="flex:1"><label for="mDist">Data</label><select id="mDist"><option value="clustered">Clustered</option><option value="gaussian">Gaussian</option><option value="uniform">Uniform</option></select></div>
+              <div class="field" style="flex:1"><label for="mR">r</label><input id="mR" type="number" value="16"></div>
+              <div class="field" style="flex:1"><label for="mL">l_build</label><input id="mL" type="number" value="64"></div>
+            </div>
+          </div>
+          <div id="mLiveFields" hidden><div class="field"><label for="mColl">Collection on the server</label><select id="mColl"></select></div><p class="muted" style="font-size:.85rem">Queries are stored vectors with small random noise added. Latency is the server’s own <code>search_duration_us</code>.</p></div>
+          <div class="row">
+            <div class="field" style="flex:1"><label for="mK">k</label><input id="mK" type="number" value="10"></div>
+            <div class="field" style="flex:2"><label for="mEf">ef_search values</label><input id="mEf" type="text" value="10,16,24,32,64,128"></div>
+            <div class="field" style="flex:1"><label for="mQ">Queries</label><input id="mQ" type="number" value="100"></div>
+          </div>
+          <button class="btn primary" id="mRun">Run measurement</button>
+          <div class="progress" style="margin-top:.6rem"><i id="mProg"></i></div>
+          <p class="muted" id="mStatus" style="font-size:.85rem;margin-top:.4rem"></p>
+        </div>
+        <div class="panel"><h3>Recall@k against ef_search</h3><div class="chart" id="mChartRecall"></div></div>
+        <div class="panel"><h3>Work per query: nodes reached</h3><div class="chart" id="mChartVisited"></div></div>
+        <div class="panel"><h3>Latency per query (median)</h3><div class="chart" id="mChartLat"></div><p class="muted" id="mLatNote" style="font-size:.82rem"></p></div>
+      </div>
+      <div class="panel" style="margin-top:1rem"><h3>Table</h3><div class="scroll"><table><thead><tr><th class="num">ef_search</th><th class="num">Recall@k</th><th class="num">nodes reached</th><th class="num">nodes expanded</th><th class="num">p50</th><th class="num">p95</th></tr></thead><tbody id="mTable"></tbody></table></div></div>
+    </section>
+
+    <!-- INGEST -->
+    <section class="view" id="view-ingest">
+      <header><h2>Ingest a file</h2><p>Start a JSONL ingestion job and follow it through its states. Invalid lines are reported with their line numbers; choose whether they stop the job or are skipped.</p></header>
+      <div class="grid2">
+        <div class="panel">
+          <h3>Job</h3>
+          <div class="row">
+            <div class="field" style="flex:2"><label for="iColl">Target collection (created if missing)</label><input id="iColl" type="text" value="ingest_demo"></div>
+            <div class="field" style="flex:1"><label for="iDim">Dimension</label><input id="iDim" type="number" value="3"></div>
+            <div class="field" style="flex:1"><label for="iOnErr">On invalid line</label><select id="iOnErr"><option value="fail_fast">Stop (fail_fast)</option><option value="skip">Skip</option></select></div>
+          </div>
+          <div id="iSimFile">
+            <div class="row" style="justify-content:space-between"><label for="iText" class="muted" style="font-size:.88rem">File content (the simulation keeps it as <code>/sim/files/upload.jsonl</code>)</label><button class="btn" id="iGen">Generate 2 000 lines with 2 bad ones</button></div>
+            <textarea id="iText"></textarea>
+          </div>
+          <div id="iLiveFile" hidden><div class="field"><label for="iPath">Absolute path of the file on the server</label><input id="iPath" type="text" value="/tmp/data.jsonl"></div><p class="muted" style="font-size:.85rem">Generate one with <code>riskann-bench gen-jsonl --n 1000 --dim 3 --out /tmp/data.jsonl</code>.</p></div>
+          <button class="btn primary" id="iStart">Start ingestion</button>
+        </div>
+        <div class="panel">
+          <h3>Job state</h3>
+          <svg class="sm-states" viewBox="0 0 520 150" id="iSm" role="img" aria-label="Job state machine">
+            <defs><marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/></marker></defs>
+            <g data-s="queued"><rect x="10" y="50" width="100" height="44" rx="8"/><text x="60" y="77" text-anchor="middle">queued</text></g>
+            <g data-s="running"><rect x="170" y="50" width="110" height="44" rx="8"/><text x="225" y="77" text-anchor="middle">running</text></g>
+            <g data-s="completed"><rect x="350" y="10" width="150" height="44" rx="8"/><text x="425" y="37" text-anchor="middle">completed</text></g>
+            <g data-s="failed"><rect x="350" y="92" width="150" height="44" rx="8"/><text x="425" y="119" text-anchor="middle">failed</text></g>
+            <path d="M110,72 L168,72" stroke="var(--edge)" stroke-width="2" marker-end="url(#arr2)"/>
+            <path d="M280,66 L348,36" stroke="var(--edge)" stroke-width="2" marker-end="url(#arr2)"/>
+            <path d="M280,78 L348,110" stroke="var(--edge)" stroke-width="2" marker-end="url(#arr2)"/>
+          </svg>
+          <div class="progress" style="margin:.6rem 0"><i id="iProg"></i></div>
+          <div class="stats" id="iStats"></div>
+          <h3 style="margin-top:.8rem">Rejected lines</h3>
+          <div class="scroll" style="max-height:140px"><table><thead><tr><th class="num">line</th><th>reason</th></tr></thead><tbody id="iRej"></tbody></table></div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:1rem"><h3>Status response (<code>GET …/ingest/{job_id}</code>)</h3><pre class="json" id="iJson">No job yet.</pre></div>
+    </section>
+
+    <!-- STORAGE -->
+    <section class="view" id="view-storage">
+      <header><h2>Storage files</h2><p>Each collection is a directory with two fixed-size binary files. Slot <i>i</i> of <code>vectors.bin</code> holds the vector with internal id <i>i</i>; slot <i>i</i> of <code>graph.bin</code> holds its neighbour list, ended and padded with <code>FFFFFFFF</code>. Click a slot.</p></header>
+      <div class="grid2">
+        <div class="panel">
+          <div class="row"><div class="field" style="flex:1"><label for="sColl">Collection</label><select id="sColl"></select></div><button class="btn" id="sLoad">Load</button></div>
+          <canvas class="slots" id="sCanvas" aria-label="Slot map"></canvas>
+          <div class="legend" style="margin-top:.5rem"><span class="sw" style="background:var(--accent)"></span><span>Live slot (has a vector)</span><span class="sw" style="background:var(--surface-2);border:1px solid var(--line)"></span><span>Free slot (allocated capacity)</span><span class="sw" style="background:var(--miss)"></span><span>Entry point</span></div>
+          <p class="muted" id="sInfo" style="font-size:.85rem;margin-top:.5rem"></p>
+        </div>
+        <div class="panel"><h3 id="sSlotTitle">Slot details</h3><div id="sSlot" class="muted">Select a slot.</div></div>
+        <div class="panel"><h3><code>config.json</code></h3><pre class="json" id="sConfig"></pre></div>
+        <div class="panel"><h3><code>metadata.json</code></h3><pre class="json" id="sMeta"></pre></div>
+      </div>
+    </section>
+
+    <!-- TESTS -->
+    <section class="view" id="view-tests">
+      <header><h2>Run tests</h2><p>Three suites run from this page. The algorithm suite checks the JavaScript port of the core logic. The API suite exercises the HTTP contract, against the simulation and, when connected, against the real RiskANN server. The Rust test suite itself (109 tests) runs with <code>cargo test --workspace</code>.</p></header>
+      <div class="row" style="margin-bottom:1rem">
+        <button class="btn primary" id="tAlgo">Run algorithm tests</button>
+        <button class="btn" id="tSim">Run API tests on the simulation</button>
+        <button class="btn" id="tLive" disabled>Run API tests on the live server</button>
+      </div>
+      <div class="grid2">
+        <div class="panel"><h3>Results</h3><div class="row" id="tSummary" style="margin-bottom:.5rem"></div><div class="testlist scroll" id="tList" style="max-height:620px"></div></div>
+        <div class="panel">
+          <h3>Rust test suite</h3>
+          <p class="muted" style="font-size:.88rem">Run on your machine with <code>cargo test --workspace</code>. Results belong in README §3.2.</p>
+          <table><thead><tr><th>File</th><th class="num">Tests</th><th>Covers</th></tr></thead><tbody id="tRust"></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ARCHITECTURE -->
+    <section class="view" id="view-architecture">
+      <header><h2>Architecture</h2><p>Four Rust crates. Click a block for its responsibilities, or play a request to see which parts it passes through.</p></header>
+      <div class="grid2">
+        <div class="panel arch">
+          <svg viewBox="0 0 560 520" id="archSvg" role="img" aria-label="Architecture diagram">
+            <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/></marker></defs>
+            <g class="box" data-k="client"><rect x="180" y="10" width="200" height="54" rx="10"/><text x="280" y="34" text-anchor="middle">Client</text><text class="sub" x="280" y="52" text-anchor="middle">curl, this console, an app</text></g>
+            <g class="box" data-k="server"><rect x="130" y="104" width="300" height="70" rx="10"/><text x="280" y="130" text-anchor="middle">server (Axum + Tokio)</text><text class="sub" x="280" y="150" text-anchor="middle">request id · body limit · validation · errors</text><text class="sub" x="280" y="166" text-anchor="middle">spawn_blocking for engine work</text></g>
+            <g class="box" data-k="engine"><rect x="100" y="214" width="360" height="86" rx="10"/><text x="280" y="240" text-anchor="middle">engine</text><text class="sub" x="280" y="260" text-anchor="middle">DBInfo registry · Collection (RwLock)</text><text class="sub" x="280" y="276" text-anchor="middle">ids · upsert/link · search · exact · ingest jobs</text><text class="sub" x="280" y="292" text-anchor="middle">metadata persistence</text></g>
+            <g class="box" data-k="core"><rect x="40" y="344" width="220" height="74" rx="10"/><text x="150" y="370" text-anchor="middle">riskann-core</text><text class="sub" x="150" y="390" text-anchor="middle">distances · beam search</text><text class="sub" x="150" y="406" text-anchor="middle">RobustPrune</text></g>
+            <g class="box" data-k="storage"><rect x="300" y="344" width="220" height="74" rx="10"/><text x="410" y="370" text-anchor="middle">storage</text><text class="sub" x="410" y="390" text-anchor="middle">DiskStore (memmap2)</text><text class="sub" x="410" y="406" text-anchor="middle">checked reads/writes, resize</text></g>
+            <g class="box" data-k="files"><rect x="300" y="452" width="220" height="56" rx="10"/><text x="410" y="476" text-anchor="middle">collection directory</text><text class="sub" x="410" y="494" text-anchor="middle">vectors.bin · graph.bin · *.json</text></g>
+            <path class="wire" d="M280,64 L280,102"/><path class="wire" d="M280,174 L280,212"/>
+            <path class="wire" d="M200,300 L170,342"/><path class="wire" d="M360,300 L390,342"/><path class="wire" d="M410,418 L410,450"/>
+          </svg>
+        </div>
+        <div>
+          <div class="panel"><h3 id="archTitle">Select a block</h3><div id="archText" class="muted">Each block is a crate (or the client and the files on disk).</div></div>
+          <div class="panel">
+            <h3>Follow a request</h3>
+            <div class="row" style="margin-bottom:.6rem"><select id="flowSel" style="width:auto"><option value="search">Search</option><option value="upsert">Upsert</option><option value="ingest">Ingestion job</option></select><button class="btn primary" id="flowPlay">Play</button></div>
+            <ol class="steps" id="flowSteps"></ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- REQUESTS -->
+    <section class="view" id="view-requests">
+      <header><h2>Requests and logs</h2><p>Every API call made by this console, with its status, latency and <code>x-request-id</code>. Click a row for the full request and response.</p></header>
+      <div class="grid2">
+        <div class="panel"><h3>Requests</h3><div class="scroll" style="max-height:520px"><table><thead><tr><th>method</th><th>path</th><th class="num">status</th><th class="num">ms</th><th>request id</th></tr></thead><tbody id="rList"></tbody></table></div></div>
+        <div class="panel"><h3>Request and response</h3><pre class="json" id="rDetail">Select a request.</pre></div>
+      </div>
+      <div class="panel" style="margin-top:1rem">
+        <div class="row" style="justify-content:space-between"><h3 id="logTitle">Server log</h3><div class="row"><label for="logLevel" class="muted">Show</label><select id="logLevel" style="width:auto"><option value="INFO">info and above</option><option value="DEBUG">debug and above</option></select></div></div>
+        <p class="muted" id="logNote" style="font-size:.85rem"></p>
+        <div class="log" id="logBox"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script id="riskann-core">
+/*CORE-BEGIN*/
+"use strict";
+const RK = (() => {
+  const f32 = Math.fround;
+
+  // ---------- distances (same conventions as crates/core/src/distances.rs) ----------
+  function l2(a, b) { let s = 0; for (let i = 0; i < a.length; i++) { const d = a[i] - b[i]; s += d * d; } return f32(Math.sqrt(s)); }
+  function cosine(a, b) {
+    let dot = 0, na = 0, nb = 0;
+    for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+    if (na === 0 || nb === 0) return 1;
+    const s = Math.max(-1, Math.min(1, dot / (Math.sqrt(na) * Math.sqrt(nb))));
+    return f32(1 - s);
+  }
+  const METRIC = { L2: l2, COSINE: cosine };
+  const cmp = (x, y) => (x.d - y.d) || (x.id - y.id);
+
+  class Heap {
+    constructor(less) { this.a = []; this.less = less; }
+    get size() { return this.a.length; }
+    peek() { return this.a[0]; }
+    push(x) { const a = this.a; a.push(x); let i = a.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (this.less(a[i], a[p])) { [a[i], a[p]] = [a[p], a[i]]; i = p; } else break; } }
+    pop() {
+      const a = this.a, top = a[0], last = a.pop();
+      if (a.length) { a[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < a.length && this.less(a[l], a[m])) m = l; if (r < a.length && this.less(a[r], a[m])) m = r; if (m === i) break; [a[i], a[m]] = [a[m], a[i]]; i = m; } }
+      return top;
+    }
+  }
+  class SearchError extends Error {}
+  const fin = (id, d) => { if (!Number.isFinite(d)) throw new SearchError("non-finite distance computed for node " + id); return d; };
+
+  // ---------- beam search (crates/core/src/vamana.rs::beam_search) ----------
+  function beamSearch(entries, ef, n, dq, nbrs, opt = {}) {
+    if (!(ef >= 1)) throw new SearchError("ef must be at least 1");
+    const out = { results: [], expanded: [], stats: { visited: 0, expanded: 0, dist: 0, skipped: 0 }, events: opt.record ? [] : null };
+    if (n === 0) return out;
+    const ents = Array.isArray(entries) ? entries : [entries];
+    if (!ents.length) throw new SearchError("at least one entry point is required");
+    for (const e of ents) if (e >= n) throw new SearchError("entry point " + e + " is out of range");
+    const visited = new Uint8Array(n);
+    const frontier = new Heap((x, y) => cmp(x, y) < 0);
+    const results = new Heap((x, y) => cmp(x, y) > 0);
+    for (const e of ents) {
+      if (visited[e]) continue;
+      visited[e] = 1;
+      const c = { id: e, d: fin(e, dq(e)) };
+      out.stats.visited++; out.stats.dist++;
+      const admit = results.size < ef || cmp(c, results.peek()) < 0;
+      let evict = null;
+      if (admit) { frontier.push(c); results.push(c); if (results.size > ef) evict = results.pop().id; }
+      if (out.events) out.events.push({ t: "visit", id: e, d: c.d, admit, evict, from: null, entry: true });
+    }
+    while (frontier.size) {
+      const c = frontier.pop();
+      if (results.size >= ef && cmp(c, results.peek()) > 0) { if (out.events) out.events.push({ t: "stop", id: c.id, worst: results.peek().id }); break; }
+      out.stats.expanded++;
+      if (opt.collect) out.expanded.push(c);
+      if (out.events) out.events.push({ t: "expand", id: c.id, d: c.d });
+      for (const u of nbrs(c.id)) {
+        if (u >= n) { out.stats.skipped++; continue; }
+        if (visited[u]) continue;
+        visited[u] = 1;
+        const cand = { id: u, d: fin(u, dq(u)) };
+        out.stats.visited++; out.stats.dist++;
+        const admit = results.size < ef || cmp(cand, results.peek()) < 0;
+        let evict = null;
+        if (admit) { frontier.push(cand); results.push(cand); if (results.size > ef) evict = results.pop().id; }
+        if (out.events) out.events.push({ t: "visit", id: u, d: cand.d, admit, evict, from: c.id });
+      }
+    }
+    out.results = results.a.slice().sort(cmp);
+    return out;
+  }
+
+  // ---------- RobustPrune (crates/core/src/vamana.rs::robust_prune) ----------
+  function robustPrune(node, cands, r, alpha, pd, record) {
+    if (r < 1) throw new SearchError("r must be at least 1");
+    if (!(alpha > 0) || !Number.isFinite(alpha)) throw new SearchError("alpha must be a positive finite number");
+    const sorted = cands.filter(c => c.id !== node && Number.isFinite(c.d)).sort(cmp);
+    const seen = new Set(), pool = [];
+    for (const c of sorted) if (!seen.has(c.id)) { seen.add(c.id); pool.push(c); }
+    const sel = [], decisions = [];
+    for (const p of pool) {
+      if (sel.length >= r) { if (record) decisions.push({ id: p.id, d: p.d, kept: false, reason: "degree", by: null }); else break; continue; }
+      let by = null;
+      for (const s of sel) { const d = pd(s, p.id); if (f32(alpha * d) <= p.d) { by = s; break; } }
+      if (by === null) { sel.push(p.id); if (record) decisions.push({ id: p.id, d: p.d, kept: true }); }
+      else if (record) decisions.push({ id: p.id, d: p.d, kept: false, reason: "covered", by });
+    }
+    return record ? { sel, decisions } : sel;
+  }
+
+  // ---------- index (crates/engine/src/collection.rs) ----------
+  class Index {
+    constructor(cfg) {
+      this.dim = cfg.dim; this.metric = cfg.metric; this.dist = METRIC[cfg.metric];
+      this.r = cfg.r; this.alpha = f32(cfg.alpha); this.L = cfg.l_build || 2 * cfg.r;
+      this.capacity = cfg.capacity || 1000; this.growth = [];
+      this.vec = []; this.ext = []; this.map = new Map(); this.edges = []; this.medoid = null;
+      this.E = cfg.entry_points || 1; this.entries = [];
+    }
+    get n() { return this.ext.length; }
+    target(n) { return Math.min(this.E, Math.max(1, Math.ceil(Math.sqrt(n)))); }
+    ensureCap(need) { if (need <= this.capacity) return; const from = this.capacity; this.capacity = Math.min(Math.max(this.capacity * 2, need), 4294967294); this.growth.push({ from, to: this.capacity }); }
+    pd(a, b) { return this.dist(this.vec[a], this.vec[b]); }
+    link(i, v, num, record) {
+      if (this.medoid === null) return null;
+      const sr = beamSearch(this.entries, this.L, num, x => this.dist(this.vec[x], v), x => this.edges[x], { collect: true, record });
+      const pool = sr.expanded.concat(sr.results);
+      const pr = robustPrune(i, pool, this.r, this.alpha, (a, b) => this.pd(a, b), record);
+      const fwd = record ? pr.sel : pr;
+      this.edges[i] = fwd.slice();
+      const rev = [];
+      for (const nb of fwd) {
+        const e = this.edges[nb];
+        if (e.includes(i)) { rev.push({ nb, added: false, repruned: false }); continue; }
+        const before = e.slice(), grown = e.concat([i]);
+        if (grown.length <= this.r) { this.edges[nb] = grown; rev.push({ nb, added: true, repruned: false, before, after: grown }); }
+        else {
+          const base = this.vec[nb];
+          const after = robustPrune(nb, grown.map(x => ({ id: x, d: this.dist(base, this.vec[x]) })), this.r, this.alpha, (a, b) => this.pd(a, b), false);
+          this.edges[nb] = after;
+          rev.push({ nb, added: after.includes(i), repruned: true, before, after });
+        }
+      }
+      return record ? { search: sr, pool, prune: pr, forward: fwd, reverse: rev } : null;
+    }
+    upsert(ext, values, record) {
+      const v = Float32Array.from(values);
+      if (this.map.has(ext)) { const id = this.map.get(ext); this.vec[id] = v; const tr = this.link(id, v, this.n, record); return { internal_id: id, created: false, trace: tr }; }
+      const id = this.n; this.ensureCap(id + 1); this.vec[id] = v; this.edges[id] = [];
+      const tr = this.link(id, v, id, record);
+      this.ext.push(ext); this.map.set(ext, id);
+      if (this.medoid === null) { this.medoid = id; this.entries = [id]; }
+      else if (this.entries.length < this.target(this.n)) this.entries.push(id);
+      return { internal_id: id, created: true, trace: tr };
+    }
+    store(ext, values) {
+      const v = Float32Array.from(values);
+      if (this.map.has(ext)) { this.vec[this.map.get(ext)] = v; return false; }
+      const id = this.n; this.ensureCap(id + 1); this.vec[id] = v; this.edges[id] = []; this.ext.push(ext); this.map.set(ext, id); return true;
+    }
+    selectMedoid() {
+      const n = this.n, c = new Float64Array(this.dim);
+      for (let i = 0; i < n; i++) for (let j = 0; j < this.dim; j++) c[j] += this.vec[i][j];
+      const cf = Float32Array.from(c, x => x / Math.max(n, 1));
+      let best = { id: 0, d: Infinity };
+      for (let i = 0; i < n; i++) { const cand = { id: i, d: this.dist(cf, this.vec[i]) }; if (cmp(cand, best) < 0) best = cand; }
+      return best.id;
+    }
+    // Farthest-point sampling from the medoid (crates/engine/src/collection.rs::select_entry_points).
+    selectEntries(clearEdges) {
+      const n = this.n; if (!n) { this.entries = []; this.medoid = null; return []; }
+      const m = this.selectMedoid(), t = this.target(n), ents = [m], near = new Float64Array(n);
+      for (let i = 0; i < n; i++) near[i] = this.dist(this.vec[m], this.vec[i]);
+      while (ents.length < t) {
+        let b = -1, bd = -1;
+        for (let i = 0; i < n; i++) if (near[i] > bd) { bd = near[i]; b = i; }
+        if (bd <= 0) break;
+        ents.push(b);
+        for (let i = 0; i < n; i++) { const d = this.dist(this.vec[b], this.vec[i]); if (d < near[i]) near[i] = d; }
+      }
+      if (clearEdges) for (const e of ents) this.edges[e] = [];
+      this.entries = ents; this.medoid = ents[0];
+      return ents;
+    }
+    linkExisting(id, record) { return this.link(id, this.vec[id], this.n, record); }
+    bulk(records) { for (const [e, v] of records) this.store(e, v); if (this.n) { const es = new Set(this.selectEntries(true)); for (let i = 0; i < this.n; i++) if (!es.has(i)) this.linkExisting(i); } }
+    search(q, k, ef, opt = {}) {
+      if (this.n === 0) return { hits: [], stats: { visited: 0, expanded: 0, dist: 0 }, expanded: [], events: [] };
+      const out = beamSearch(this.entries, ef, this.n, x => this.dist(this.vec[x], q), x => this.edges[x], { collect: !!opt.trace, record: !!opt.record });
+      return { hits: out.results.slice(0, k), stats: out.stats, expanded: out.expanded.map(c => c.id), events: out.events };
+    }
+    exact(q, k) { const all = []; for (let i = 0; i < this.n; i++) all.push({ id: i, d: this.dist(this.vec[i], q) }); return all.sort(cmp).slice(0, k); }
+    verify() {
+      if (this.entries[0] !== (this.medoid === null ? undefined : this.medoid) || this.entries.some((e, i) => e >= this.n || this.entries.indexOf(e) !== i)) return "invalid entry points";
+      for (let i = 0; i < this.n; i++) { const e = this.edges[i]; if (e.length > this.r) return "node " + i + " has degree " + e.length; for (let j = 0; j < e.length; j++) if (e[j] >= this.n || e[j] === i || e.indexOf(e[j]) !== j) return "node " + i + " has invalid edge " + e[j]; }
+      return null;
+    }
+  }
+
+  // ---------- deterministic data (crates/engine/src/dataset.rs) ----------
+  const M64 = (1n << 64n) - 1n;
+  class SplitMix64 {
+    constructor(seed) { this.s = BigInt.asUintN(64, BigInt(seed)); }
+    nextU64() { this.s = (this.s + 0x9E3779B97F4A7C15n) & M64; let z = this.s; z = ((z ^ (z >> 30n)) * 0xBF58476D1CE4E5B9n) & M64; z = ((z ^ (z >> 27n)) * 0x94D049BB133111EBn) & M64; return z ^ (z >> 31n); }
+    nextF64() { return Number(this.nextU64() >> 11n) / 9007199254740992; }
+    gauss() { const u1 = 1 - this.nextF64(), u2 = this.nextF64(); return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2); }
+    below(n) { return n === 0 ? 0 : Number(this.nextU64() % BigInt(n)); }
+  }
+  const stream = (seed, sid) => new SplitMix64(new SplitMix64(BigInt.asUintN(64, BigInt(seed)) ^ ((BigInt(sid) * 0xD6E8FEB86659FD93n) & M64)).nextU64());
+  function generate(n, dim, seed, dist, nq) {
+    let kind = dist, clusters = 32;
+    if (dist.startsWith("clustered")) { kind = "clustered"; const p = dist.split(":")[1]; if (p) clusters = Math.max(1, +p); }
+    const centres = [];
+    if (kind === "clustered") { const r = stream(seed, 1); for (let c = 0; c < clusters; c++) { const v = []; for (let j = 0; j < dim; j++) v.push(3 * r.gauss()); centres.push(v); } }
+    const sample = r => {
+      if (kind === "uniform") return Array.from({ length: dim }, () => f32(r.nextF64() * 2 - 1));
+      if (kind === "gaussian") return Array.from({ length: dim }, () => f32(r.gauss()));
+      const c = centres[r.below(centres.length)]; return c.map(m => f32(m + r.gauss()));
+    };
+    const rb = stream(seed, 2), rq = stream(seed, 3);
+    return { base: Array.from({ length: n }, () => sample(rb)), queries: Array.from({ length: nq }, () => sample(rq)) };
+  }
+
+  // ---------- simulated server (same routes, validation and error codes as crates/server) ----------
+  const LIM = { MAX_K: 1000, DEF_EF: 64, MAX_EF: 4096, MAX_DIM: 16384, MAX_R: 256, MAX_L: 1024, MIN_A: 1, MAX_A: 10, MAX_CAP: 50000000, MAX_ID: 512, DEF_GRAPH: 1000, MAX_GRAPH: 5000 };
+  class ApiErr extends Error { constructor(status, code, message) { super(message); this.status = status; this.code = code; } }
+  const bad = (code, msg) => new ApiErr(400, code, msg);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const bytes = s => new TextEncoder().encode(s).length;
+  const fmtFields = f => Object.entries(f).map(([k, v]) => k + "=" + (typeof v === "string" ? JSON.stringify(v) : Array.isArray(v) ? "[" + v.map(x => JSON.stringify(x)).join(", ") + "]" : v)).join(" ");
+
+  function parseBody(body, spec, deny) {
+    if (body === undefined) throw new ApiErr(415, "UNSUPPORTED_MEDIA_TYPE", "expected request with `Content-Type: application/json`");
+    if (body === null || typeof body !== "object" || Array.isArray(body)) throw bad("MALFORMED_REQUEST", "Failed to deserialize the JSON body into the target type: invalid type: expected a JSON object");
+    if (deny) for (const k of Object.keys(body)) if (!(k in spec)) throw bad("MALFORMED_REQUEST", "Failed to deserialize the JSON body into the target type: unknown field `" + k + "`, expected one of " + Object.keys(spec).map(x => "`" + x + "`").join(", "));
+    const out = {};
+    for (const [k, [type, def]] of Object.entries(spec)) {
+      let v = body[k];
+      if (v === undefined || v === null) { if (def === undefined) throw bad("MALFORMED_REQUEST", "Failed to deserialize the JSON body into the target type: missing field `" + k + "`"); out[k] = typeof def === "function" ? def(out) : def; continue; }
+      const typeErr = () => bad("MALFORMED_REQUEST", "Failed to deserialize the JSON body into the target type: " + k + ": invalid type: " + JSON.stringify(v).slice(0, 30) + ", expected " + type);
+      if (type === "usize" && !(Number.isInteger(v) && v >= 0)) throw typeErr();
+      if (type === "f32" && typeof v !== "number") throw typeErr();
+      if (type === "string" && typeof v !== "string") throw typeErr();
+      if (type === "bool" && typeof v !== "boolean") throw typeErr();
+      if (type === "vec") { if (!Array.isArray(v) || v.some(x => typeof x !== "number")) throw typeErr(); v = v.map(f32); }
+      if (type === "metric") { const m = { L2: "L2", l2: "L2", COSINE: "COSINE", cosine: "COSINE", Cosine: "COSINE" }[v]; if (!m) throw bad("MALFORMED_REQUEST", "Failed to deserialize the JSON body into the target type: metric: unknown variant `" + v + "`, expected `L2` or `COSINE`"); v = m; }
+      if (type === "onerror" && v !== "fail_fast" && v !== "skip") throw bad("MALFORMED_REQUEST", "Failed to deserialize the JSON body into the target type: on_error: unknown variant `" + v + "`, expected `fail_fast` or `skip`");
+      out[k] = v;
+    }
+    return out;
+  }
+
+  class SimServer {
+    constructor(logSink) {
+      this.cols = new Map(); this.jobs = new Map(); this.files = new Map();
+      this.seq = 0; this.jobSeq = 0; this.logSink = logSink || (() => {});
+    }
+    log(level, target, span, msg, fields = {}) {
+      const ts = new Date().toISOString().replace("Z", "000Z");
+      const line = ts + " " + level.padStart(5) + " " + (span ? span + ": " : "") + target + ": " + msg + (Object.keys(fields).length ? " " + fmtFields(fields) : "");
+      this.logSink({ level, line });
+    }
+    validName(n) { if (!n || n.length > 64) throw bad("INVALID_COLLECTION_NAME", "invalid collection name: must be 1..=64 characters"); if (!/^[A-Za-z0-9_-]+$/.test(n)) throw bad("INVALID_COLLECTION_NAME", "invalid collection name: only ASCII letters, digits, '_' and '-' are allowed"); }
+    get(n) { this.validName(n); const c = this.cols.get(n); if (!c) throw new ApiErr(404, "COLLECTION_NOT_FOUND", "collection '" + n + "' not found"); return c; }
+    info(c) {
+      const ix = c.index;
+      return { name: c.name, dim: ix.dim, metric: ix.metric, r: ix.r, alpha: c.cfg.alpha, l_build: ix.L, count: ix.n, capacity: ix.capacity, entry_point: ix.medoid, entry_point_count: ix.entries.length, format_version: 1, index_state: c.ingesting > 0 ? "ingesting" : "ready", disk_bytes: ix.capacity * ix.dim * 4 + ix.capacity * ix.r * 4 };
+    }
+    checkVec(c, v, field) {
+      if (v.length !== c.index.dim) throw bad("DIMENSION_MISMATCH", "vector has " + v.length + " components but the collection dimension is " + c.index.dim);
+      const i = v.findIndex(x => !Number.isFinite(x)); if (i >= 0) throw bad("INVALID_ARGUMENT", field + ": component " + i + " is NaN or infinite");
+      if (c.index.metric === "COSINE" && v.every(x => x === 0)) throw bad("INVALID_ARGUMENT", field + ": zero vector is not allowed with the COSINE metric");
+    }
+    async handle(method, path, body) {
+      const t0 = (typeof performance !== "undefined" ? performance : Date).now();
+      const rid = "req-" + (++this.seq);
+      const url = new URL(path, "http://sim.local");
+      const span = "request{request_id=" + rid + " method=" + method + " path=" + url.pathname + "}";
+      let status, json;
+      try { [status, json] = await this.route(method, url, body, span); }
+      catch (e) {
+        if (e instanceof ApiErr) { status = e.status; json = { error: { code: e.code, message: e.message } }; if (status < 500) this.log("DEBUG", "server::error", span, "client error detail", { code: e.code, message: e.message }); }
+        else { status = 500; json = { error: { code: "INTERNAL_ERROR", message: "internal server error" } }; this.log("ERROR", "server::error", span, "internal error while handling request", { error: String(e && e.message || e) }); }
+      }
+      const latency = Math.round(((typeof performance !== "undefined" ? performance : Date).now() - t0) * 100) / 100;
+      const probe = url.pathname === "/health" || url.pathname === "/ready";
+      if (status >= 500) this.log("ERROR", "server::logging", span, "request failed", { status, error_code: json && json.error ? json.error.code : "-", latency_ms: latency });
+      else if (status >= 400) this.log("WARN", "server::logging", span, "request rejected", { status, error_code: json && json.error ? json.error.code : "-", latency_ms: latency });
+      else this.log(probe ? "DEBUG" : "INFO", "server::logging", span, "request completed", { status, latency_ms: latency });
+      return { status, json, requestId: rid };
+    }
+    async route(method, url, body, span) {
+      const p = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+      const notAllowed = () => [405, null];
+      if (p.length === 1 && p[0] === "health") return method === "GET" ? [200, { status: "ok" }] : notAllowed();
+      if (p.length === 1 && p[0] === "ready") return [200, { ready: true, collections_loaded: this.cols.size, collections_failed: [] }];
+      if (p[0] !== "collections") throw new ApiErr(404, "ROUTE_NOT_FOUND", "no route matches this path");
+      if (p.length === 1) { if (method !== "GET") return notAllowed(); return [200, { collections: [...this.cols.values()].sort((a, b) => a.name < b.name ? -1 : 1).map(c => this.info(c)) }]; }
+      const name = p[1];
+      if (p.length === 2) {
+        if (method === "PUT") return this.create(name, body, span);
+        if (method === "GET") return [200, { collection: this.info(this.get(name)) }];
+        if (method === "DELETE") { const c = this.get(name); this.log("INFO", "engine::db", span, "deleting collection: waiting for in-flight writes", { collection: name }); await c.lock; c.deleted = true; this.cols.delete(name); this.log("INFO", "engine::db", span, "deleted collection", { collection: name }); return [200, { deleted: name }]; }
+        return notAllowed();
+      }
+      const c = () => this.get(name);
+      const sub = p.slice(2).join("/");
+      if (sub === "upsert" && method === "POST") {
+        const col = c(); const b = parseBody(body, { id: ["string"], vector: ["vec"] });
+        if (!b.id) throw bad("INVALID_ARGUMENT", "id: must not be empty");
+        if (bytes(b.id) > LIM.MAX_ID) throw bad("INVALID_ARGUMENT", "id: must be at most 512 bytes");
+        this.checkVec(col, b.vector, "vector"); await col.lock;
+        const t = Date.now(); const o = col.index.upsert(b.id, b.vector, false);
+        this.log("DEBUG", "engine::collection", span, "upsert applied", { collection: name, internal_id: o.internal_id, created: o.created, elapsed_us: (Date.now() - t) * 1000 });
+        return [200, { id: b.id, internal_id: o.internal_id, created: o.created }];
+      }
+      if ((sub === "search" || sub === "search/exact") && method === "POST") {
+        const col = c(); const exact = sub === "search/exact";
+        const spec = { vector: ["vec"], k: ["usize", 10], include_vectors: ["bool", false], include_distances: ["bool", true] };
+        if (!exact) { spec.ef_search = ["usize", null]; spec.trace = ["bool", false]; }
+        const b = parseBody(body, spec, true);
+        if (b.k < 1 || b.k > LIM.MAX_K) throw bad("INVALID_ARGUMENT", "k: must be in 1..=1000");
+        const ef = exact ? null : (b.ef_search == null ? Math.max(b.k, LIM.DEF_EF) : b.ef_search);
+        if (!exact && (ef < b.k || ef > LIM.MAX_EF)) throw bad("INVALID_ARGUMENT", "ef_search: must be >= k (" + b.k + ") and <= 4096");
+        this.checkVec(col, b.vector, "vector"); await col.lock;
+        const t0 = (typeof performance !== "undefined" ? performance : Date).now();
+        const ix = col.index;
+        let hits, stats, trace;
+        if (exact) { hits = ix.exact(b.vector, b.k); stats = { visited_nodes: ix.n, expanded_nodes: 0, distance_computations: ix.n }; }
+        else { const r = ix.search(b.vector, b.k, ef, { trace: b.trace }); hits = r.hits; stats = { visited_nodes: r.stats.visited, expanded_nodes: r.stats.expanded, distance_computations: r.stats.dist }; if (b.trace && ix.n) trace = { entry_point: ix.medoid, entry_points: ix.entries.slice(), expanded: r.expanded }; }
+        const us = Math.round(((typeof performance !== "undefined" ? performance : Date).now() - t0) * 1000);
+        this.log("DEBUG", "engine::collection", span, "search executed", exact ? { collection: name, mode: "exact", k: b.k, scanned: ix.n, returned: hits.length, duration_us: us } : { collection: name, mode: "approximate", k: b.k, ef_search: ef, visited: stats.visited_nodes, expanded: stats.expanded_nodes, returned: hits.length, duration_us: us });
+        const res = { collection: name, metric: ix.metric, mode: exact ? "exact" : "approximate", k: b.k };
+        if (!exact) res.ef_search = ef;
+        res.results = hits.map(h => { const o = { id: ix.ext[h.id], internal_id: h.id }; if (b.include_distances) o.distance = h.d; if (b.include_vectors) o.vector = Array.from(ix.vec[h.id]); return o; });
+        res.stats = Object.assign(stats, { returned: hits.length, search_duration_us: us });
+        if (trace) res.trace = trace;
+        return [200, res];
+      }
+      if (p[2] === "vectors" && p.length === 4 && method === "GET") {
+        const col = c(); const id = col.index.map.get(p[3]);
+        if (id === undefined) throw new ApiErr(404, "VECTOR_NOT_FOUND", "vector with id '" + p[3] + "' not found");
+        return [200, { id: p[3], internal_id: id, vector: Array.from(col.index.vec[id]) }];
+      }
+      if (sub === "graph" && method === "GET") {
+        const col = c(); const raw = url.searchParams.get("limit");
+        if (raw !== null && !/^\d+$/.test(raw)) throw bad("MALFORMED_REQUEST", "Failed to deserialize query string: limit: invalid digit found in string");
+        const limit = raw === null ? LIM.DEF_GRAPH : +raw;
+        if (limit < 1 || limit > LIM.MAX_GRAPH) throw bad("INVALID_ARGUMENT", "limit: must be in 1..=5000");
+        const ix = col.index, m = Math.min(limit, ix.n), nodes = [], edges = [];
+        for (let i = 0; i < m; i++) { nodes.push({ internal_id: i, id: ix.ext[i], vector: Array.from(ix.vec[i]) }); for (const e of ix.edges[i]) if (e < m) edges.push([i, e]); }
+        return [200, { collection: name, metric: ix.metric, dim: ix.dim, r: ix.r, count: ix.n, entry_point: ix.medoid, entry_points: ix.entries.slice(), nodes, edges, truncated: m < ix.n }];
+      }
+      if (sub === "ingest" && method === "POST") {
+        const col = c(); const b = parseBody(body, { path: ["string"], on_error: ["onerror", "fail_fast"], checkpoint_every: ["usize", null] }, true);
+        if (b.checkpoint_every === 0) throw bad("INVALID_ARGUMENT", "checkpoint_every: must be at least 1");
+        if (!b.path.trim()) throw bad("INVALID_ARGUMENT", "path: must not be empty");
+        if (!b.path.startsWith("/")) throw bad("INVALID_ARGUMENT", "path: must be an absolute path on the server");
+        if (!this.files.has(b.path)) throw bad("INGEST_FILE_UNAVAILABLE", "bulk file not found or not accessible");
+        const job = this.startJob(col, b.path, b.on_error);
+        return [202, { job_id: job.job_id, collection: name, state: job.state, status_url: "/collections/" + name + "/ingest/" + job.job_id }];
+      }
+      if (p[2] === "ingest" && p.length === 4 && method === "GET") {
+        this.validName(name); const j = this.jobs.get(p[3]);
+        if (!j || j.collection !== name) throw new ApiErr(404, "JOB_NOT_FOUND", "ingestion job '" + p[3] + "' not found");
+        return [200, JSON.parse(JSON.stringify(j))];
+      }
+      throw new ApiErr(404, "ROUTE_NOT_FOUND", "no route matches this path");
+    }
+    async create(name, body, span) {
+      this.validName(name);
+      const b = parseBody(body, { dim: ["usize"], metric: ["metric"], r: ["usize"], alpha: ["f32"], initial_capacity: ["usize", 1000], l_build: ["usize", o => Math.min(Math.max(2 * o.r, 64), LIM.MAX_L)], entry_points: ["usize", 64], bulk_file: ["string", null], on_error: ["onerror", "fail_fast"] });
+      if (b.dim < 1 || b.dim > LIM.MAX_DIM) throw bad("INVALID_ARGUMENT", "dim: must be in 1..=16384");
+      if (b.r < 1 || b.r > LIM.MAX_R) throw bad("INVALID_ARGUMENT", "r: must be in 1..=256");
+      if (!Number.isFinite(b.alpha) || b.alpha < LIM.MIN_A || b.alpha > LIM.MAX_A) throw bad("INVALID_ARGUMENT", "alpha: must be a finite number in [1, 10]");
+      if (b.l_build < 1 || b.l_build > LIM.MAX_L) throw bad("INVALID_ARGUMENT", "l_build: must be in 1..=1024");
+      if (b.entry_points < 1 || b.entry_points > 1024) throw bad("INVALID_ARGUMENT", "entry_points: must be in 1..=1024");
+      if (b.initial_capacity < 1 || b.initial_capacity > LIM.MAX_CAP) throw bad("INVALID_ARGUMENT", "initial_capacity: must be in 1..=50000000");
+      if (b.bulk_file != null) { if (!b.bulk_file.startsWith("/")) throw bad("INVALID_ARGUMENT", "path: must be an absolute path on the server"); if (!this.files.has(b.bulk_file)) throw bad("INGEST_FILE_UNAVAILABLE", "bulk file not found or not accessible"); }
+      if (this.cols.has(name)) throw new ApiErr(409, "COLLECTION_EXISTS", "collection '" + name + "' already exists");
+      const col = { name, cfg: { alpha: b.alpha }, index: new Index({ dim: b.dim, metric: b.metric, r: b.r, alpha: b.alpha, l_build: b.l_build, entry_points: b.entry_points, capacity: b.initial_capacity }), ingesting: 0, lock: Promise.resolve(), deleted: false };
+      this.cols.set(name, col);
+      this.log("INFO", "engine::db", span, "created collection", { collection: name, dim: b.dim, metric: b.metric, r: b.r, alpha: b.alpha, l_build: b.l_build, initial_capacity: b.initial_capacity });
+      if (b.bulk_file != null) { const job = this.startJob(col, b.bulk_file, b.on_error); return [202, { collection: this.info(col), job_id: job.job_id, status_url: "/collections/" + name + "/ingest/" + job.job_id }]; }
+      return [201, { collection: this.info(col) }];
+    }
+    startJob(col, path, onError) {
+      const job = { job_id: "job-" + Date.now() + "-" + (++this.jobSeq), collection: col.name, state: "queued", on_error: onError, mode: null, records_read: 0, records_inserted: 0, records_updated: 0, records_rejected: 0, current_line: 0, nodes_linked: 0, created_at_ms: Date.now(), started_at_ms: null, finished_at_ms: null, error: null, rejected_samples: [] };
+      this.jobs.set(job.job_id, job);
+      setTimeout(() => { this.runJob(col, job, this.files.get(path)).catch(e => { job.state = "failed"; job.error = "ingestion task terminated unexpectedly"; job.finished_at_ms = Date.now(); this.log("ERROR", "server::api::ingest", "", "ingestion worker terminated abnormally", { job: job.job_id, error: String(e) }); }); }, 300);
+      return job;
+    }
+    async runJob(col, job, text) {
+      const span = "ingest_job{job=" + job.job_id + " collection=" + col.name + "}";
+      const ix = col.index, t0 = Date.now();
+      job.state = "running"; job.started_at_ms = Date.now(); col.ingesting++;
+      this.log("INFO", "engine::ingest", span, "ingestion job started", { on_error: job.on_error === "skip" ? "Skip" : "FailFast", file_bytes: "Some(" + bytes(text) + ")" });
+      const initial = ix.n === 0, mode = initial ? "InitialBuild" : "Incremental";
+      this.log("INFO", "engine::collection", span, "ingestion started", { collection: col.name, mode, on_error: job.on_error === "skip" ? "Skip" : "FailFast", existing_vectors: ix.n });
+      let release; if (initial) col.lock = new Promise(r => { release = r; });
+      const lines = text.split("\n");
+      let fail = null;
+      const reject = (line, reason) => { job.records_rejected++; if (job.rejected_samples.length < 20) job.rejected_samples.push({ line, reason }); this.log("DEBUG", "engine::collection", span, "record rejected", { collection: col.name, line, reason }); if (job.on_error === "fail_fast") { fail = "line " + line + ": " + reason; return true; } return false; };
+      try {
+        for (let i = 0; i < lines.length; i++) {
+          if (col.deleted) { fail = "operation cancelled: collection was deleted during ingestion"; break; }
+          const raw = lines[i].replace(/\r$/, ""), line = i + 1;
+          if (!raw.trim()) continue;
+          job.records_read++; job.current_line = line;
+          let rec;
+          try { rec = JSON.parse(raw); } catch (e) { if (reject(line, "invalid record: " + e.message)) break; continue; }
+          if (!rec || typeof rec !== "object" || typeof rec.id !== "string" || !Array.isArray(rec.vector) || rec.vector.some(x => typeof x !== "number")) {
+            const why = !rec || typeof rec !== "object" ? "invalid type" : rec.id === undefined ? "missing field `id`" : rec.vector === undefined ? "missing field `vector`" : "invalid type for `id` or `vector`";
+            if (reject(line, "invalid record: " + why)) break; continue;
+          }
+          const v = rec.vector.map(f32);
+          try { if (!rec.id) throw bad("INVALID_ARGUMENT", "id: must not be empty"); this.checkVec(col, v, "vector"); }
+          catch (e) { if (reject(line, e.message)) break; continue; }
+          const created = initial ? ix.store(rec.id, v) : ix.upsert(rec.id, v, false).created;
+          if (created) job.records_inserted++; else job.records_updated++;
+          if (job.records_read % 40 === 0) await sleep(12);
+        }
+        if (initial) {
+          this.log("INFO", "engine::collection", span, "bulk build: vectors loaded, linking graph", { collection: col.name, vectors: ix.n, rejected: job.records_rejected });
+          if (ix.n) {
+            const ents = ix.selectEntries(true), es = new Set(ents); job.nodes_linked = ents.length;
+            this.log("INFO", "engine::collection", span, "bulk build: entry points selected", { collection: col.name, entry_point: "Some(" + ents[0] + ")", entry_points: ents.length, nodes: ix.n });
+            for (let i = 0; i < ix.n; i++) { if (es.has(i)) continue; ix.linkExisting(i, false); job.nodes_linked++; if (job.nodes_linked % 25 === 0) await sleep(8); }
+            this.log("INFO", "engine::collection", span, "bulk build: graph linked", { collection: col.name, nodes: ix.n, elapsed_secs: (Date.now() - t0) / 1000 });
+          }
+        } else if (job.records_inserted > 0 && ix.E > 1) {
+          ix.selectEntries(false);
+          this.log("INFO", "engine::collection", span, "entry points refreshed", { collection: col.name, entry_points: ix.entries.length });
+        }
+      } finally { col.ingesting--; if (release) release(); }
+      job.mode = initial ? "initial_build" : "incremental";
+      job.error = fail; job.state = fail ? "failed" : "completed"; job.finished_at_ms = Date.now();
+      const secs = (Date.now() - t0) / 1000;
+      this.log("INFO", "engine::collection", span, "ingestion finished", { collection: col.name, mode, success: !fail, records_read: job.records_read, inserted: job.records_inserted, updated: job.records_updated, rejected: job.records_rejected, elapsed_secs: secs, records_per_sec: secs > 0 ? Math.round((job.records_inserted + job.records_updated) / secs) : 0 });
+      if (fail) this.log("WARN", "engine::ingest", span, "ingestion job failed", { inserted: job.records_inserted, updated: job.records_updated, rejected: job.records_rejected, error: fail });
+      else this.log("INFO", "engine::ingest", span, "ingestion job completed", { inserted: job.records_inserted, updated: job.records_updated, rejected: job.records_rejected });
+    }
+  }
+
+  // ---------- tests ----------
+  function assert(c, m) { if (!c) throw new Error(m || "assertion failed"); }
+  function eq(a, b, m) { const x = JSON.stringify(a), y = JSON.stringify(b); if (x !== y) throw new Error((m ? m + ": " : "") + "expected " + y + ", got " + x); }
+  function adjSearch(points, adj, entry, q, k, ef) { if (k < 1 || ef < k) throw new SearchError("invalid params"); const o = beamSearch(entry, ef, points.length, i => l2(points[i], q), i => adj[i]); o.results = o.results.slice(0, k); return o; }
+  const ids = o => o.results.map(c => c.id);
+  function line(n) { return [Array.from({ length: n }, (_, i) => [i]), Array.from({ length: n }, (_, i) => [i > 0 ? i - 1 : -1, i + 1 < n ? i + 1 : -1].filter(x => x >= 0))]; }
+
+  function algorithmTests() {
+    const T = [];
+    const t = (g, name, fn) => T.push({ group: g, name, fn });
+    t("Distances", "L2 is Euclidean, not squared", () => { eq(l2([0, 0], [3, 4]), 5); eq(l2([0], [2]), 2); });
+    t("Distances", "L2 is symmetric", () => eq(l2([0.3, -1.2, 4.5], [1.3, 0.2, -4.5]), l2([1.3, 0.2, -4.5], [0.3, -1.2, 4.5])));
+    t("Distances", "cosine: same, orthogonal, opposite", () => { assert(Math.abs(cosine([1, 0], [2, 0])) < 1e-6); assert(Math.abs(cosine([1, 0], [0, 3]) - 1) < 1e-6); assert(Math.abs(cosine([1, 0], [-1, 0]) - 2) < 1e-6); });
+    t("Distances", "cosine of identical vectors is never negative", () => { const d = cosine([0.1, 0.7, -0.3, 5], [0.1, 0.7, -0.3, 5]); assert(d >= 0 && d < 1e-6, String(d)); });
+    t("Distances", "cosine with a zero vector is 1", () => eq(cosine([0, 0], [1, 2]), 1));
+    t("Ordering", "candidates order by distance, then lower id", () => { const v = [{ id: 5, d: 1 }, { id: 2, d: 0.5 }, { id: 1, d: 1 }, { id: 9, d: 0 }].sort(cmp); eq(v.map(c => c.id), [9, 2, 1, 5]); });
+    t("Beam search", "single node with no edges", () => eq(ids(adjSearch([[1, 1]], [[]], 0, [0, 0], 3, 8)), [0]));
+    t("Beam search", "empty graph returns nothing", () => eq(beamSearch(0, 1, 0, () => 0, () => []).results, []));
+    t("Beam search", "greedy walk along a line with ef = 1", () => { const [p, a] = line(10); eq(ids(adjSearch(p, a, 0, [8.9], 1, 1)), [9]); });
+    t("Beam search", "top-k on a line", () => { const [p, a] = line(10); eq(ids(adjSearch(p, a, 0, [4.2], 3, 3)), [4, 5, 3]); });
+    t("Beam search", "cycles terminate and nodes are visited once", () => { const n = 12, p = Array.from({ length: n }, (_, i) => [Math.cos(i / n * 2 * Math.PI), Math.sin(i / n * 2 * Math.PI)]), a = p.map((_, i) => [(i + 1) % n, (i + n - 1) % n, i]); const o = adjSearch(p, a, 0, p[6], 2, n); eq(o.results[0].id, 6); assert(o.stats.visited <= n); });
+    t("Beam search", "disconnected graph returns only reachable nodes", () => eq(ids(adjSearch([[0], [1], [100], [101]], [[1], [0], [3], [2]], 0, [100], 4, 4)), [1, 0]));
+    t("Beam search", "duplicate neighbours are evaluated once", () => { const o = adjSearch([[0], [1], [2]], [[1, 1, 1, 2, 2], [0, 0], [0]], 0, [0], 3, 3); eq(o.stats.dist, 3); });
+    t("Beam search", "equal distances tie-break by lower id", () => eq(ids(adjSearch([[0.5, 0.5], [0, 1], [1, 0], [0, -1], [-1, 0]], [[4, 2, 3, 1], [0], [0], [0], [0]], 0, [0, 0], 5, 5)), [0, 1, 2, 3, 4]));
+    t("Beam search", "out-of-range neighbours are skipped", () => { const o = adjSearch([[0], [1]], [[1, 7, 4294967295], [0]], 0, [1], 2, 2); eq(ids(o), [1, 0]); eq(o.stats.skipped, 2); });
+    t("Beam search", "non-finite distance is an error", () => { let threw = false; try { beamSearch(0, 2, 2, i => (i === 1 ? NaN : 0), i => (i === 0 ? [1] : [0])); } catch (e) { threw = e instanceof SearchError; } assert(threw); });
+    t("Beam search", "full beam on a complete graph equals brute force", () => { const g = generate(60, 4, 7, "uniform", 10); const adj = g.base.map((_, i) => g.base.map((__, j) => j).filter(j => j !== i)); for (const q of g.queries) { const o = adjSearch(g.base, adj, 0, q, 10, 60); const ex = g.base.map((v, i) => ({ id: i, d: l2(v, q) })).sort(cmp).slice(0, 10); eq(ids(o), ex.map(c => c.id)); } });
+    const pr = (pts, node, cs, r, a) => robustPrune(node, cs.map(i => ({ id: i, d: l2(pts[node], pts[i]) })), r, a, (x, y) => l2(pts[x], pts[y]));
+    t("RobustPrune", "drops points hidden behind a closer neighbour", () => eq(pr([[0], [1], [2], [3]], 0, [3, 2, 1], 3, 1), [1]));
+    t("RobustPrune", "keeps neighbours in different directions", () => eq(pr([[0, 0], [1, 0], [0, 1], [-1, 0]], 0, [1, 2, 3], 3, 1.2), [1, 2, 3]));
+    t("RobustPrune", "removes self and duplicates, respects r", () => eq(pr([[0, 0], [1, 0], [0, 1], [-1, 0]], 0, [0, 1, 1, 2, 2, 3, 0], 2, 1.2), [1, 2]));
+    t("RobustPrune", "larger alpha keeps more edges", () => eq(pr([[0], [1], [2], [3]], 0, [1, 2, 3], 3, 2.5), [1, 2]));
+    const recallOf = (ix, qs, k, ef) => qs.reduce((s, q) => { const a = new Set(ix.search(q, k, ef).hits.map(h => h.id)); return s + ix.exact(q, k).filter(h => a.has(h.id)).length / Math.min(k, ix.n); }, 0) / qs.length;
+    t("Engine", "bulk build: Recall@10 >= 0.95 at ef 64 (1 000 x 16, L2)", () => { const g = generate(1000, 16, 42, "clustered", 40); const ix = new Index({ dim: 16, metric: "L2", r: 16, alpha: 1.2, l_build: 64, entry_points: 64 }); ix.bulk(g.base.map((v, i) => ["v" + i, v])); eq(ix.verify(), null, "graph invariants"); const r = recallOf(ix, g.queries, 10, 64); assert(r >= 0.95, "recall " + r.toFixed(4)); return "recall " + r.toFixed(4); });
+    t("Engine", "incremental build: Recall@10 >= 0.95 at ef 64 (cosine)", () => { const g = generate(600, 16, 42, "clustered", 40); const ix = new Index({ dim: 16, metric: "COSINE", r: 16, alpha: 1.2, l_build: 64, entry_points: 64 }); g.base.forEach((v, i) => ix.upsert("v" + i, v)); eq(ix.verify(), null, "graph invariants"); const r = recallOf(ix, g.queries, 10, 64); assert(r >= 0.95, "recall " + r.toFixed(4)); return "recall " + r.toFixed(4); });
+    t("Engine", "clustered L2 data stays navigable with 64 entry points (4 000 x 32, 32 clusters)", () => {
+      const g = generate(4000, 32, 42, "clustered:32", 100), mk = E => { const ix = new Index({ dim: 32, metric: "L2", r: 16, alpha: 1.2, l_build: 64, entry_points: E }); ix.bulk(g.base.map((v, i) => ["v" + i, v])); return ix; };
+      const multi = mk(64), single = mk(1); eq(multi.entries.length, 64); eq(multi.verify(), null);
+      const rm = recallOf(multi, g.queries, 10, 32), rs = recallOf(single, g.queries, 10, 32);
+      assert(rm >= 0.95, "64 entry points: recall " + rm.toFixed(3)); assert(rm > rs, "multi " + rm + " vs single " + rs);
+      return "Recall@10 at ef 32: " + rm.toFixed(3) + " with 64 entry points, " + rs.toFixed(3) + " with 1";
+    });
+    t("Beam search", "multiple entry points reach a disconnected component", () => { const p = [[0], [1], [100], [101]], a = [[1], [0], [3], [2]]; eq(beamSearch([0], 4, 4, i => l2(p[i], [100]), i => a[i]).results.slice(0, 2).map(c => c.id), [1, 0]); const o = beamSearch([0, 2, 2, 0], 4, 4, i => l2(p[i], [100]), i => a[i]); eq(o.results.slice(0, 2).map(c => c.id), [2, 3]); eq(o.stats.visited, 4); });
+    t("Engine", "upsert of an existing id keeps its internal id", () => { const ix = new Index({ dim: 2, metric: "L2", r: 4, alpha: 1.2 }); ix.upsert("a", [0, 0]); ix.upsert("b", [1, 1]); const o = ix.upsert("a", [5, 5]); eq([o.internal_id, o.created, ix.n], [0, false, 2]); eq(ix.verify(), null); });
+    t("Engine", "identical input builds identical graphs", () => { const g = generate(200, 8, 1, "clustered", 0); const a = new Index({ dim: 8, metric: "L2", r: 8, alpha: 1.2, l_build: 32 }), b = new Index({ dim: 8, metric: "L2", r: 8, alpha: 1.2, l_build: 32 }); a.bulk(g.base.map((v, i) => [String(i), v])); b.bulk(g.base.map((v, i) => [String(i), v])); eq(a.edges, b.edges); });
+    t("Engine", "storage capacity doubles when full", () => { const ix = new Index({ dim: 1, metric: "L2", r: 2, alpha: 1.2, capacity: 2 }); for (let i = 0; i < 9; i++) ix.upsert("p" + i, [i]); eq(ix.capacity, 16); eq(ix.growth.map(g => g.to), [4, 8, 16]); });
+    t("Data", "SplitMix64 reference values", () => { const r = new SplitMix64(0); eq(r.nextU64().toString(16), "e220a8397b1dcdaf"); eq(r.nextU64().toString(16), "6e789e6aa1b965f4"); });
+    t("Data", "datasets are deterministic", () => eq(generate(30, 4, 9, "clustered", 3), generate(30, 4, 9, "clustered", 3)));
+    return T;
+  }
+
+  function apiTests(client) {
+    const T = [], name = "selftest_" + Date.now().toString(36);
+    const t = (n, fn) => T.push({ group: "API", name: n, fn });
+    const req = (m, p, b) => client.req(m, p, b);
+    const code = (r, s, c) => { eq(r.status, s, "status"); if (c) eq(r.json && r.json.error && r.json.error.code, c, "error code"); };
+    const pts = [["item-001", [0.12, 0.34, 0.56]], ["item-002", [0.78, 0.9, 0.12]], ["item-003", [0.45, 0.67, 0.89]], ["item-004", [0.1, 0.3, 0.5]], ["item-005", [0.9, 0.1, 0.2]]];
+    t("GET /health returns ok", async () => { const r = await req("GET", "/health"); code(r, 200); eq(r.json.status, "ok"); assert(r.requestId, "x-request-id header missing"); });
+    t("PUT creates a collection (201)", async () => { const r = await req("PUT", "/collections/" + name, { dim: 3, metric: "L2", r: 8, alpha: 1.2, initial_capacity: 16 }); code(r, 201); eq(r.json.collection.dim, 3); eq(r.json.collection.count, 0); });
+    t("duplicate name is rejected (409)", async () => code(await req("PUT", "/collections/" + name, { dim: 3, metric: "L2", r: 8, alpha: 1.2 }), 409, "COLLECTION_EXISTS"));
+    t("invalid name is rejected (400)", async () => code(await req("PUT", "/collections/bad.name", { dim: 3, metric: "L2", r: 8, alpha: 1.2 }), 400, "INVALID_COLLECTION_NAME"));
+    t("alpha below 1 is rejected (400)", async () => code(await req("PUT", "/collections/" + name + "_x", { dim: 3, metric: "L2", r: 8, alpha: 0.5 }), 400, "INVALID_ARGUMENT"));
+    t("upsert inserts five vectors", async () => { for (const [id, v] of pts) { const r = await req("POST", "/collections/" + name + "/upsert", { id, vector: v }); code(r, 200); eq(r.json.created, true); } });
+    t("upsert of an existing id keeps its internal id", async () => { const r = await req("POST", "/collections/" + name + "/upsert", { id: "item-005", vector: [0.9, 0.1, 0.25] }); code(r, 200); eq([r.json.created, r.json.internal_id], [false, 4]); });
+    t("search returns the exact match first, ordered", async () => { const r = await req("POST", "/collections/" + name + "/search", { vector: [0.1, 0.3, 0.5], k: 2, ef_search: 16 }); code(r, 200); eq(r.json.results.map(x => x.id), ["item-004", "item-001"]); assert(r.json.results[0].distance <= r.json.results[1].distance); });
+    t("exact search agrees and scans every vector", async () => { const r = await req("POST", "/collections/" + name + "/search/exact", { vector: [0.1, 0.3, 0.5], k: 2 }); code(r, 200); eq(r.json.results[0].id, "item-004"); eq(r.json.stats.distance_computations, 5); });
+    t("wrong dimension is rejected (400)", async () => code(await req("POST", "/collections/" + name + "/search", { vector: [0.1, 0.2] }), 400, "DIMENSION_MISMATCH"));
+    t("k = 0 and ef_search < k are rejected (400)", async () => { code(await req("POST", "/collections/" + name + "/search", { vector: [0, 0, 0], k: 0 }), 400, "INVALID_ARGUMENT"); code(await req("POST", "/collections/" + name + "/search", { vector: [0, 0, 0], k: 10, ef_search: 5 }), 400, "INVALID_ARGUMENT"); });
+    t("unknown field such as filter is rejected (400)", async () => code(await req("POST", "/collections/" + name + "/search", { vector: [0, 0, 0], filter: { a: 1 } }), 400, "MALFORMED_REQUEST"));
+    t("a value beyond f32 range is rejected (400)", async () => { const r = await req("POST", "/collections/" + name + "/search", { vector: [1e39, 0, 0] }); eq(r.status, 400); });
+    t("vector lookup by id, and 404 for a missing id", async () => { const r = await req("GET", "/collections/" + name + "/vectors/item-003"); code(r, 200); eq(r.json.vector.length, 3); code(await req("GET", "/collections/" + name + "/vectors/nope"), 404, "VECTOR_NOT_FOUND"); });
+    t("search trace starts at one of the entry points", async () => { const r = await req("POST", "/collections/" + name + "/search", { vector: [0.1, 0.3, 0.5], k: 2, trace: true }); code(r, 200); assert(r.json.trace.entry_points.includes(r.json.trace.expanded[0]), "first expansion is not an entry point"); eq(r.json.trace.entry_points[0], r.json.trace.entry_point); eq(r.json.trace.expanded.length, r.json.stats.expanded_nodes); });
+    t("graph snapshot satisfies the invariants", async () => { const r = await req("GET", "/collections/" + name + "/graph?limit=100"); code(r, 200); eq(r.json.nodes.length, 5); const deg = {}; for (const [a, b] of r.json.edges) { assert(a !== b && a < 5 && b < 5, "bad edge " + a + "->" + b); deg[a] = (deg[a] || 0) + 1; } assert(Object.values(deg).every(d => d <= r.json.r), "degree above r"); });
+    t("DELETE removes the collection", async () => { code(await req("DELETE", "/collections/" + name), 200); code(await req("POST", "/collections/" + name + "/search", { vector: [0, 0, 0] }), 404, "COLLECTION_NOT_FOUND"); });
+    t("unknown route uses the error envelope (404)", async () => code(await req("GET", "/no/such/route"), 404, "ROUTE_NOT_FOUND"));
+    return T;
+  }
+
+  async function runTests(list, onResult) {
+    let pass = 0, fail = 0;
+    for (const tc of list) {
+      const t0 = (typeof performance !== "undefined" ? performance : Date).now();
+      let ok = true, note = "";
+      try { const r = await tc.fn(); if (typeof r === "string") note = r; } catch (e) { ok = false; note = e && e.message ? e.message : String(e); }
+      const ms = (typeof performance !== "undefined" ? performance : Date).now() - t0;
+      ok ? pass++ : fail++;
+      if (onResult) onResult({ group: tc.group, name: tc.name, ok, note, ms });
+      await sleep(0);
+    }
+    return { pass, fail };
+  }
+
+  return { l2, cosine, cmp, beamSearch, robustPrune, Index, SplitMix64, generate, SimServer, algorithmTests, apiTests, runTests, METRIC, f32 };
+})();
+if (typeof module !== "undefined") module.exports = RK;
+/*CORE-END*/
+</script>
+
+<script>
+"use strict";
+(() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const fmt = (x, d = 4) => (x == null ? "–" : (+x).toFixed(d));
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  // ---------- logs and request inspector ----------
+  const LOG = [], REQS = [];
+  let logPending = false;
+  function logSink(entry) { LOG.push(entry); if (LOG.length > 3000) LOG.splice(0, LOG.length - 3000); if (!logPending) { logPending = true; requestAnimationFrame(() => { logPending = false; if (current === "requests") renderLog(); }); } }
+  function renderLog() {
+    const min = $("logLevel").value, rank = { TRACE: 0, DEBUG: 1, INFO: 2, WARN: 3, ERROR: 4 };
+    const box = $("logBox");
+    if (S.mode === "live") { box.textContent = "Server logs are written to the server’s standard output. Look up the request ids listed above, for example:\n  grep req-12 riskann.log"; return; }
+    box.innerHTML = LOG.filter(e => rank[e.level] >= rank[min]).slice(-800).map(e => '<div class="' + e.level + '">' + esc(e.line) + "</div>").join("");
+    box.scrollTop = box.scrollHeight;
+  }
+  function renderReqs() {
+    const tb = $("rList");
+    tb.innerHTML = REQS.slice().reverse().slice(0, 400).map((r, i) => '<tr class="req" data-i="' + (REQS.length - 1 - i) + '"><td>' + r.method + "</td><td><code>" + esc(r.path) + '</code></td><td class="num">' + r.status + '</td><td class="num">' + r.ms.toFixed(1) + "</td><td><code>" + esc(r.requestId || "–") + "</code></td></tr>").join("");
+  }
+  $("rList").addEventListener("click", e => {
+    const tr = e.target.closest("tr.req"); if (!tr) return;
+    document.querySelectorAll("#rList tr.sel").forEach(x => x.classList.remove("sel")); tr.classList.add("sel");
+    const r = REQS[+tr.dataset.i];
+    const trim = j => { const s = JSON.stringify(j, null, 2); return s && s.length > 20000 ? s.slice(0, 20000) + "\n… (truncated for display)" : s; };
+    $("rDetail").textContent = r.method + " " + r.path + "\nx-request-id: " + (r.requestId || "–") + "\n\nRequest body:\n" + (r.body === undefined ? "(none)" : trim(r.body)) + "\n\nResponse " + r.status + ":\n" + trim(r.json);
+  });
+  $("logLevel").addEventListener("change", renderLog);
+
+  // ---------- clients ----------
+  class LiveClient {
+    async req(method, path, body) {
+      const t0 = performance.now();
+      const init = { method, headers: {} };
+      if (body !== undefined) { init.headers["content-type"] = "application/json"; init.body = JSON.stringify(body); }
+      const r = await fetch(path, init);
+      const text = await r.text(); let json = null; try { json = text ? JSON.parse(text) : null; } catch { json = text; }
+      const res = { status: r.status, json, requestId: r.headers.get("x-request-id"), ms: performance.now() - t0 };
+      REQS.push(Object.assign({ method, path, body }, res)); if (current === "requests") renderReqs();
+      return res;
+    }
+  }
+  class SimClient {
+    constructor(server) { this.s = server; }
+    async req(method, path, body) {
+      const t0 = performance.now();
+      const res = await this.s.handle(method, path, body === undefined ? undefined : JSON.parse(JSON.stringify(body)));
+      res.ms = performance.now() - t0;
+      REQS.push(Object.assign({ method, path, body }, res)); if (current === "requests") renderReqs();
+      return res;
+    }
+  }
+  const S = { mode: "sim", liveAvailable: false, sim: new RK.SimServer(logSink), client: null };
+  S.simClient = new SimClient(S.sim); S.liveClient = new LiveClient(); S.client = S.simClient;
+  const api = (m, p, b) => S.client.req(m, p, b);
+
+  async function detectLive() {
+    if (!/^https?:$/.test(location.protocol)) return false;
+    try {
+      const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), 1500);
+      const r = await fetch("/health", { signal: ctrl.signal }); clearTimeout(timer);
+      if (!r.ok || !r.headers.get("x-request-id")) return false;
+      const j = await r.json(); return j && j.status === "ok";
+    } catch { return false; }
+  }
+  function setMode(mode) {
+    S.mode = mode; S.client = mode === "live" ? S.liveClient : S.simClient;
+    $("modePill").classList.toggle("live", mode === "live");
+    $("modeText").textContent = mode === "live" ? "Live: RiskANN server at " + location.host : "In-browser simulation";
+    $("simNotice").hidden = mode === "live";
+    $("modeSwitch").hidden = !S.liveAvailable;
+    $("modeSwitch").textContent = mode === "live" ? "Use simulation" : "Use live server";
+    $("tLive").disabled = !S.liveAvailable;
+    $("mSimFields").hidden = mode === "live"; $("mLiveFields").hidden = mode !== "live";
+    $("iSimFile").hidden = mode === "live"; $("iLiveFile").hidden = mode !== "live";
+    $("logTitle").textContent = mode === "live" ? "Server log (on the server)" : "Server log (simulated server; same events and format as the Rust server)";
+    $("logNote").textContent = mode === "live" ? "" : "Lines below are emitted by the simulated server in the tracing text format the Rust server writes to standard output.";
+    refreshCollections();
+  }
+  $("modeSwitch").addEventListener("click", () => setMode(S.mode === "live" ? "sim" : "live"));
+
+  // ---------- routing ----------
+  const VIEWS = ["explore", "build", "measure", "ingest", "storage", "tests", "architecture", "requests"];
+  let current = "explore";
+  function route() {
+    const h = location.hash.replace("#", "");
+    current = VIEWS.includes(h) ? h : "explore";
+    VIEWS.forEach(v => $("view-" + v).classList.toggle("on", v === current));
+    document.querySelectorAll(".rail a").forEach(a => a.toggleAttribute("aria-current", a.getAttribute("href") === "#" + current));
+    document.querySelectorAll(".rail a[aria-current]").forEach(a => a.setAttribute("aria-current", "page"));
+    if (current === "requests") { renderReqs(); renderLog(); }
+    if (current === "explore") requestAnimationFrame(() => EX.draw(EX.final && EX.step >= EX.events.length));
+    if (current === "build") requestAnimationFrame(() => B.draw());
+    if (current === "storage") requestAnimationFrame(() => (ST.info ? ST.draw() : ST.load()));
+  }
+  window.addEventListener("hashchange", route);
+
+  // ---------- collections ----------
+  async function refreshCollections() {
+    const r = await api("GET", "/collections");
+    const list = r.status === 200 ? r.json.collections : [];
+    for (const sel of ["exColl", "sColl", "mColl"]) {
+      const el = $(sel), prev = el.value;
+      el.innerHTML = list.length ? list.map(c => '<option value="' + esc(c.name) + '">' + esc(c.name) + " (" + c.count + " × " + c.dim + "d, " + c.metric + ")</option>").join("") : "<option value=\"\">No collections yet</option>";
+      if (list.some(c => c.name === prev)) el.value = prev;
+    }
+    return list;
+  }
+
+  // ---------- projection ----------
+  function project(vectors) {
+    const n = vectors.length; if (!n) return [];
+    const d = vectors[0].length;
+    if (d === 1) return vectors.map(v => [v[0], 0]);
+    if (d === 2) return vectors.map(v => [v[0], v[1]]);
+    const mean = new Float64Array(d); vectors.forEach(v => v.forEach((x, j) => mean[j] += x / n));
+    const X = vectors.map(v => v.map((x, j) => x - mean[j]));
+    const comp = [];
+    for (let c = 0; c < 2; c++) {
+      let w = Array.from({ length: d }, (_, j) => Math.sin(j + 1 + c * 7));
+      for (let it = 0; it < 60; it++) {
+        const nw = new Float64Array(d);
+        for (const x of X) { let s = 0; for (let j = 0; j < d; j++) s += x[j] * w[j]; for (let j = 0; j < d; j++) nw[j] += s * x[j]; }
+        for (const p of comp) { let s = 0; for (let j = 0; j < d; j++) s += nw[j] * p[j]; for (let j = 0; j < d; j++) nw[j] -= s * p[j]; }
+        const norm = Math.hypot(...nw) || 1; w = Array.from(nw, x => x / norm);
+      }
+      comp.push(w);
+    }
+    return X.map(x => comp.map(p => x.reduce((s, xj, j) => s + xj * p[j], 0)));
+  }
+
+  // ---------- canvas helpers ----------
+  function setupCanvas(cv) {
+    const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    if (cv.width !== Math.round(r.width * dpr) || cv.height !== Math.round(r.height * dpr)) { cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr); }
+    const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w: r.width, h: r.height };
+  }
+  function fitter(points, w, h, pad = 28) {
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const [x, y] of points) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    if (!isFinite(x0)) { x0 = -1; x1 = 1; y0 = -1; y1 = 1; }
+    const sx = (w - 2 * pad) / ((x1 - x0) || 1), sy = (h - 2 * pad - 40) / ((y1 - y0) || 1), s = Math.min(sx, sy);
+    const ox = pad + ((w - 2 * pad) - s * (x1 - x0)) / 2, oy = pad + ((h - 2 * pad - 40) - s * (y1 - y0)) / 2;
+    return { to: ([x, y]) => [ox + (x - x0) * s, oy + (y1 - y) * s], from: (px, py) => [x0 + (px - ox) / s, y1 - (py - oy) / s] };
+  }
+  const dot = (ctx, x, y, r, fill, stroke, lw = 2, dash) => { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.setLineDash(dash || []); ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke(); ctx.setLineDash([]); } };
+  const lineTo = (ctx, a, b, color, lw = 1, alpha = 1, dash) => { ctx.globalAlpha = alpha; ctx.setLineDash(dash || []); ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; };
+
+  // ---------- EXPLORE ----------
+  const EX = {
+    snap: null, pts: [], adj: [], fit: null, query: null, events: [], step: 0, playing: false, final: null, exact: null, traceCheck: "",
+    state() { return { visited: new Set(), expanded: [], beam: new Set(), cur: null }; },
+    async load(name) {
+      if (!name) { this.snap = null; this.draw(); $("exNarr").textContent = "Create a collection to start."; return; }
+      const r = await api("GET", "/collections/" + encodeURIComponent(name) + "/graph?limit=3000");
+      if (r.status !== 200) { $("exNarr").textContent = "Could not load the graph: " + (r.json && r.json.error ? r.json.error.message : r.status); return; }
+      const s = r.json; this.snap = s;
+      this.vecs = s.nodes.map(n => Float32Array.from(n.vector));
+      this.pts = project(this.vecs);
+      this.adj = s.nodes.map(() => []); for (const [a, b] of s.edges) this.adj[a].push(b);
+      this.final = null; this.events = []; this.step = 0; this.query = null;
+      const deg = s.nodes.length ? (s.edges.length / s.nodes.length).toFixed(1) : 0;
+      $("exInfo").textContent = s.count + " vectors, dimension " + s.dim + ", " + s.metric + ", r = " + s.r + ", " + (s.entry_points || [s.entry_point]).length + " entry points, average out-degree " + deg + (s.dim > 2 ? ". Shown as a 2-D projection (PCA)." : ".") + (s.truncated ? " Showing the first " + s.nodes.length + " nodes." : "");
+      this.draw();
+      $("exNarr").textContent = s.count ? "Click anywhere to place a query." : "This collection is empty.";
+    },
+    queryFromClick(px, py) {
+      if (!this.snap || !this.fit) return null;
+      if (this.snap.dim === 2) { const [x, y] = this.fit.from(px, py); return [x, y]; }
+      let best = -1, bd = Infinity;
+      this.pts.forEach((p, i) => { const [sx, sy] = this.fit.to(p); const d = (sx - px) ** 2 + (sy - py) ** 2; if (d < bd) { bd = d; best = i; } });
+      if (best < 0) return null;
+      const v = this.vecs[best], sd = Math.sqrt(v.reduce((s, x) => s + x * x, 0) / v.length) || 1;
+      return Array.from(v, (x, j) => x + 0.15 * sd * Math.sin(17 * j + best));
+    },
+    async search(q) {
+      if (!this.snap || !this.snap.count) return;
+      this.query = q;
+      const k = +$("exK").value, ef = Math.max(k, +$("exEf").value), name = this.snap.collection;
+      const [ann, ex] = await Promise.all([
+        api("POST", "/collections/" + name + "/search", { vector: q, k, ef_search: ef, trace: true }),
+        api("POST", "/collections/" + name + "/search/exact", { vector: q, k })]);
+      if (ann.status !== 200) { $("exNarr").textContent = "Search failed: " + (ann.json.error ? ann.json.error.code + ": " + ann.json.error.message : ann.status); return; }
+      this.final = ann.json; this.exact = ex.status === 200 ? ex.json : null;
+      // Replay the same beam search locally on the snapshot to animate every step,
+      // then compare its expansion order with the trace the server returned.
+      this.events = []; this.traceCheck = "";
+      if (!this.snap.truncated) {
+        const metric = RK.METRIC[this.snap.metric], qf = Float32Array.from(q);
+        const ents = this.snap.entry_points && this.snap.entry_points.length ? this.snap.entry_points : [this.snap.entry_point];
+        const rep = RK.beamSearch(ents, ef, this.vecs.length, i => metric(this.vecs[i], qf), i => this.adj[i], { record: true, collect: true });
+        this.events = rep.events;
+        const mine = rep.expanded.map(c => c.id), theirs = ann.json.trace ? ann.json.trace.expanded : [];
+        let diff = -1; for (let i = 0; i < Math.max(mine.length, theirs.length); i++) if (mine[i] !== theirs[i]) { diff = i; break; }
+        this.traceCheck = diff < 0 ? "The animation replays exactly the " + theirs.length + " expansions the server reported." : "The local replay diverges from the server trace at step " + (diff + 1) + " (float rounding near a tie); the final results shown come from the server.";
+      } else if (ann.json.trace) {
+        this.events = [{ t: "visit", id: ann.json.trace.entry_point, admit: true }].concat(ann.json.trace.expanded.map(id => ({ t: "expand", id })));
+        this.traceCheck = "Large collection: animating the server’s expansion order only.";
+      }
+      this.step = 0; this.renderResults(false); this.play();
+    },
+    applied() {
+      const st = this.state();
+      for (let i = 0; i < this.step && i < this.events.length; i++) {
+        const e = this.events[i];
+        if (e.t === "visit") { st.visited.add(e.id); if (e.admit) st.beam.add(e.id); if (e.evict != null) st.beam.delete(e.evict); }
+        if (e.t === "expand") { st.expanded.push(e.id); st.cur = e.id; }
+      }
+      return st;
+    },
+    narrate() {
+      const e = this.events[this.step - 1], ext = id => (this.snap.nodes[id] ? this.snap.nodes[id].id : id);
+      if (!e) return "Ready.";
+      if (e.t === "expand") return "Step " + this.step + ": expanding node " + e.id + " (" + ext(e.id) + ", distance " + fmt(e.d) + "). Reading its " + (this.adj[e.id] || []).length + " neighbours.";
+      if (e.t === "visit") return e.from == null ? "Entry point " + e.id + " at distance " + fmt(e.d) + (e.admit ? " starts in the beam." : " is not among the best " + $("exEf").value + " entry points, so it is not kept.") : "Reached node " + e.id + " at distance " + fmt(e.d) + (e.admit ? ": it enters the beam" + (e.evict != null ? " and pushes out node " + e.evict : "") + "." : ": not better than the worst of the beam, so it is not kept.");
+      if (e.t === "stop") return "Stop: the nearest unexpanded candidate (node " + e.id + ") is worse than every result in the full beam.";
+      return "";
+    },
+    async play() {
+      const token = (this.token = (this.token || 0) + 1);
+      this.playing = true; $("exPlay").textContent = "Pause";
+      while (this.playing && this.token === token && this.step < this.events.length) {
+        this.step++; this.draw(); $("exNarr").textContent = this.narrate();
+        const sp = +$("exSpeed").value; await sleep(Math.round(900 / (sp * sp)) + 4);
+      }
+      if (this.token !== token) return;
+      if (this.step >= this.events.length) this.finish();
+      this.playing = false; $("exPlay").textContent = "Replay search";
+    },
+    finish() { this.step = this.events.length; this.draw(true); this.renderResults(true); $("exNarr").textContent = "Done. " + this.traceCheck; },
+    renderResults(done) {
+      const f = this.final; if (!f) return;
+      const truth = new Set(this.exact ? this.exact.results.map(r => r.internal_id) : []);
+      const got = f.results.map(r => r.internal_id), hit = got.filter(i => truth.has(i)).length, k = +$("exK").value;
+      const denom = Math.min(k, this.snap.count) || 1;
+      $("exRecall").textContent = done ? (hit / denom).toFixed(2) : "…";
+      $("exRecallNote").textContent = done ? hit + " of the " + denom + " true nearest neighbours were returned." : "Animating…";
+      const s = f.stats, es = this.exact ? this.exact.stats : null;
+      $("exStats").innerHTML = "<span>Nodes reached</span><b>" + s.visited_nodes + "</b><span>Nodes expanded</span><b>" + s.expanded_nodes + "</b><span>Distance computations</span><b>" + s.distance_computations + "</b><span>Exact search computations</span><b>" + (es ? es.distance_computations : "–") + "</b><span>Work saved vs exact</span><b>" + (es && es.distance_computations ? Math.round(100 * (1 - s.distance_computations / es.distance_computations)) + "%" : "–") + "</b><span>Engine time</span><b>" + s.search_duration_us + " µs</b>";
+      $("exResults").innerHTML = f.results.map((r, i) => "<tr><td>" + (i + 1) + "</td><td><code>" + esc(r.id) + '</code></td><td class="num">' + fmt(r.distance) + "</td><td>" + (truth.has(r.internal_id) ? '<span class="tag ok">yes</span>' : '<span class="tag bad">no</span>') + "</td></tr>").join("");
+    },
+    draw(done) {
+      const cv = $("exCanvas"); if (!cv.offsetParent) return;
+      const { ctx, w, h } = setupCanvas(cv); ctx.clearRect(0, 0, w, h);
+      if (!this.snap) return;
+      const pts = this.pts.slice(); if (this.query && this.snap.dim === 2) pts.push(this.query);
+      this.fit = fitter(this.pts.length ? pts : [[0, 0]], w, h);
+      const P = this.pts.map(p => this.fit.to(p));
+      const st = this.applied(), cEdge = css("--edge"), cBeam = css("--beam"), cHit = css("--hit"), cTruth = css("--truth"), cMiss = css("--miss"), cInk = css("--ink"), cSurf = css("--surface");
+      const many = P.length > 1200;
+      if ($("exEdges").checked) { ctx.globalAlpha = many ? 0.18 : 0.38; ctx.strokeStyle = cEdge; ctx.lineWidth = 1; ctx.beginPath(); this.adj.forEach((ns, a) => ns.forEach(b => { ctx.moveTo(P[a][0], P[a][1]); ctx.lineTo(P[b][0], P[b][1]); })); ctx.stroke(); ctx.globalAlpha = 1; }
+      for (let i = 1; i < st.expanded.length; i++) { const e = this.events.find(x => x.t === "visit" && x.id === st.expanded[i]); if (e && e.from != null) lineTo(ctx, P[e.from], P[e.id], cBeam, 2.5, 0.9); }
+      const rr = many ? 2 : 3.2;
+      P.forEach(([x, y]) => dot(ctx, x, y, rr, cEdge));
+      st.visited.forEach(i => dot(ctx, P[i][0], P[i][1], rr + 1.6, null, cBeam, 1.5));
+      st.expanded.forEach(i => dot(ctx, P[i][0], P[i][1], rr + 1.2, cBeam));
+      if (st.cur != null && !done) dot(ctx, P[st.cur][0], P[st.cur][1], 11, null, cBeam, 2.5);
+      if (done && this.final) {
+        const got = new Set(this.final.results.map(r => r.internal_id));
+        if ($("exExact").checked && this.exact) this.exact.results.forEach(r => { const p = P[r.internal_id]; if (!p) return; dot(ctx, p[0], p[1], 12, null, cTruth, 2, [3, 3]); if (!got.has(r.internal_id)) { ctx.strokeStyle = cMiss; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p[0] - 5, p[1] - 5); ctx.lineTo(p[0] + 5, p[1] + 5); ctx.moveTo(p[0] + 5, p[1] - 5); ctx.lineTo(p[0] - 5, p[1] + 5); ctx.stroke(); } });
+        this.final.results.forEach(r => { const p = P[r.internal_id]; if (p) dot(ctx, p[0], p[1], 8, null, cHit, 3); });
+      }
+      (this.snap.entry_points || []).forEach(e => { if (P[e]) dot(ctx, P[e][0], P[e][1], 4.5, cMiss, cSurf, 1.5); });
+      const ep = this.snap.entry_point; if (ep != null && P[ep]) { dot(ctx, P[ep][0], P[ep][1], 7, cMiss, cSurf, 2); }
+      if (this.query) {
+        let q;
+        if (this.snap.dim === 2) q = this.fit.to(this.query);
+        else if (this.final && this.final.results[0] && P[this.final.results[0].internal_id]) q = P[this.final.results[0].internal_id];
+        if (q) { ctx.strokeStyle = cInk; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(q[0] - 10, q[1]); ctx.lineTo(q[0] + 10, q[1]); ctx.moveTo(q[0], q[1] - 10); ctx.lineTo(q[0], q[1] + 10); ctx.stroke(); dot(ctx, q[0], q[1], 4, cInk); }
+      }
+    },
+  };
+  $("exCanvas").addEventListener("click", ev => { const r = ev.target.getBoundingClientRect(); const q = EX.queryFromClick(ev.clientX - r.left, ev.clientY - r.top); if (q) EX.search(q); });
+  $("exPlay").addEventListener("click", () => { if (EX.playing) { EX.playing = false; return; } if (!EX.events.length) return; if (EX.step >= EX.events.length) EX.step = 0; EX.play(); });
+  $("exStep").addEventListener("click", () => { EX.playing = false; if (EX.step < EX.events.length) { EX.step++; EX.draw(); $("exNarr").textContent = EX.narrate(); if (EX.step === EX.events.length) EX.finish(); } });
+  $("exSkip").addEventListener("click", () => { EX.playing = false; if (EX.events.length) EX.finish(); });
+  $("exEdges").addEventListener("change", () => EX.draw(EX.step >= EX.events.length && EX.final));
+  $("exExact").addEventListener("change", () => EX.draw(EX.step >= EX.events.length && EX.final));
+  $("exColl").addEventListener("change", () => EX.load($("exColl").value));
+  $("exReload").addEventListener("click", () => EX.load($("exColl").value));
+  for (const [id, out] of [["exK", "exKv"], ["exEf", "exEfv"], ["exR", "exRv"]]) $(id).addEventListener("input", () => { $(out).textContent = $(id).value; });
+  ["exK", "exEf"].forEach(id => $(id).addEventListener("change", () => { if (EX.query) EX.search(EX.query); }));
+
+  async function createDemo(name, n, dist, r, seed, progress) {
+    const del = await api("GET", "/collections/" + name);
+    if (del.status === 200) await api("DELETE", "/collections/" + name);
+    const g = RK.generate(n, 2, seed, dist, 0);
+    if (S.mode === "sim") {
+      const path = "/sim/files/" + name + ".jsonl";
+      S.sim.files.set(path, g.base.map((v, i) => JSON.stringify({ id: "p" + i, vector: v })).join("\n"));
+      const c = await api("PUT", "/collections/" + name, { dim: 2, metric: "L2", r, alpha: 1.2, initial_capacity: 64, bulk_file: path });
+      if (c.status !== 202) throw new Error(c.json.error.message);
+      for (;;) { const j = await api("GET", c.json.status_url); const st = j.json; progress(st.state === "running" ? (st.records_read + st.nodes_linked) / (2 * n) : st.state === "completed" ? 1 : 0.02); if (st.state === "completed" || st.state === "failed") break; await sleep(150); }
+    } else {
+      const c = await api("PUT", "/collections/" + name, { dim: 2, metric: "L2", r, alpha: 1.2, initial_capacity: n });
+      if (c.status !== 201) throw new Error(c.json.error.message);
+      for (let i = 0; i < n; i++) { await api("POST", "/collections/" + name + "/upsert", { id: "p" + i, vector: g.base[i] }); if (i % 10 === 0) progress(i / n); }
+      progress(1);
+    }
+  }
+  $("exCreate").addEventListener("click", async () => {
+    const btn = $("exCreate"); btn.disabled = true;
+    try {
+      const name = "demo_2d", n = Math.max(10, Math.min(3000, +$("exN").value));
+      await createDemo(name, n, $("exDist").value, +$("exR").value, +$("exSeed").value, p => { $("exProg").style.width = Math.round(p * 100) + "%"; });
+      await refreshCollections(); $("exColl").value = name; await EX.load(name);
+    } catch (e) { $("exNarr").textContent = "Could not create the collection: " + e.message; }
+    btn.disabled = false;
+  });
+
+  // ---------- BUILD ----------
+  const B = {
+    ix: null, data: [], next: 0, last: null, stage: "", playing: false,
+    reset() {
+      const n = +$("bN").value, mode = $("bMode").value;
+      this.data = RK.generate(n, 2, +$("bSeed").value, "clustered:5", 0).base;
+      this.ix = new RK.Index({ dim: 2, metric: "L2", r: +$("bR").value, alpha: +$("bA").value, l_build: +$("bL").value, entry_points: 64, capacity: 8 });
+      this.next = 0; this.last = null; this.stage = mode === "bulk" ? "store" : "insert";
+      $("bNarr").textContent = mode === "bulk" ? "Bulk mode: the first step stores every vector and picks the entry point nearest the centroid." : "Incremental mode: the first point becomes the entry point.";
+      $("bDetail").innerHTML = "Press <b>Insert next</b>.";
+      this.draw();
+    },
+    stepOnce() {
+      const ix = this.ix, mode = $("bMode").value;
+      if (mode === "bulk" && this.stage === "store") {
+        this.data.forEach((v, i) => ix.store("p" + i, v)); const ents = ix.selectEntries(true); this.stage = "link"; this.next = 0; this.last = { stored: true, medoid: ents[0] };
+        $("bNarr").textContent = "Stored " + ix.n + " vectors. Chose " + ents.length + " entry points, starting with node " + ents[0] + " (nearest the centroid). Next: link each node.";
+        $("bDetail").innerHTML = "<p>All vectors are written to <code>vectors.bin</code> first, with empty adjacency lists.</p><p>Entry points are chosen by farthest-point sampling: start at the vector nearest the mean, then repeatedly add the vector farthest from every entry point so far. Each cluster gets a nearby starting point, so no region of the graph is out of reach. The number used is min(64, ⌈√n⌉).</p>";
+        return true;
+      }
+      if (mode === "bulk") { while (this.next < ix.n && ix.entries.includes(this.next)) this.next++; if (this.next >= ix.n) return false; const id = this.next++; this.last = Object.assign({ id }, ix.linkExisting(id, true)); }
+      else { if (this.next >= this.data.length) return false; const i = this.next++; const o = ix.upsert("p" + i, this.data[i], true); this.last = Object.assign({ id: o.internal_id, first: o.trace === null }, o.trace || {}); }
+      this.describe(); return true;
+    },
+    describe() {
+      const L = this.last, ix = this.ix;
+      if (L.first) { $("bNarr").textContent = "Node " + L.id + " is the first vector: it becomes the entry point, with no edges yet."; $("bDetail").innerHTML = "<p>An empty graph has nothing to search, so the first vector is stored and becomes the entry point.</p>"; return; }
+      const kept = L.prune.decisions.filter(d => d.kept), covered = L.prune.decisions.filter(d => !d.kept && d.reason === "covered"), degree = L.prune.decisions.filter(d => d.reason === "degree");
+      const added = L.reverse.filter(r => r.added).length, rep = L.reverse.filter(r => r.repruned).length;
+      $("bNarr").textContent = "Node " + L.id + ": search reached " + L.search.stats.visited + " nodes, RobustPrune kept " + kept.length + " of " + L.prune.decisions.length + " candidates, " + added + " reverse edges added" + (rep ? ", " + rep + " neighbour lists re-pruned" : "") + ".";
+      $("bDetail").innerHTML =
+        '<ol class="steps"><li><b>Search.</b> Beam search from the entry point with l_build = ' + ix.L + " reached " + L.search.stats.visited + " nodes and expanded " + L.search.stats.expanded + ".</li>" +
+        "<li><b>Candidate pool.</b> " + new Set(L.pool.map(c => c.id)).size + " distinct nodes: every expanded node plus the final beam.</li>" +
+        "<li><b>RobustPrune</b> (r = " + ix.r + ", alpha = " + ix.alpha.toFixed(2) + "): kept " + (kept.map(d => d.id).join(", ") || "none") + "." + (covered.length ? " Pruned " + covered.slice(0, 6).map(d => d.id + " (covered by " + d.by + ")").join(", ") + (covered.length > 6 ? " and " + (covered.length - 6) + " more" : "") + "." : "") + (degree.length ? " " + degree.length + " more were skipped because the degree limit was reached." : "") + "</li>" +
+        "<li><b>Reverse edges.</b> " + L.reverse.map(r => r.added ? (r.repruned ? r.nb + " (re-pruned to " + r.after.length + ")" : String(r.nb)) : r.nb + " (dropped by re-pruning)").join(", ") + ".</li></ol>";
+    },
+    draw() {
+      const cv = $("bCanvas"); if (!cv.offsetParent || !this.ix) return;
+      const { ctx, w, h } = setupCanvas(cv); ctx.clearRect(0, 0, w, h);
+      const fit = fitter(this.data, w, h), P = this.data.map(p => fit.to(p)), ix = this.ix;
+      const cEdge = css("--edge"), cBeam = css("--beam"), cHit = css("--hit"), cTruth = css("--truth"), cMiss = css("--miss"), cInk = css("--ink"), cSurf = css("--surface");
+      const placed = ix.n;
+      for (let a = 0; a < placed; a++) for (const b of ix.edges[a]) lineTo(ctx, P[a], P[b], cEdge, 1, 0.55);
+      const L = this.last;
+      if (L && L.search) {
+        L.search.events.filter(e => e.t === "visit").forEach(e => dot(ctx, P[e.id][0], P[e.id][1], 7, null, cBeam, 1.5));
+        L.prune.decisions.forEach(d => { if (!d.kept && d.reason === "covered") { lineTo(ctx, P[L.id], P[d.id], cEdge, 1.2, 0.9, [4, 4]); lineTo(ctx, P[d.id], P[d.by], cEdge, 1, 0.6, [1, 3]); } });
+        L.reverse.forEach(r => { if (r.repruned) r.before.filter(x => !r.after.includes(x)).forEach(x => lineTo(ctx, P[r.nb], P[x], cTruth, 2, 0.9, [5, 3])); if (r.added) lineTo(ctx, P[r.nb], P[L.id], cBeam, 2.5, 0.95); });
+        L.forward.forEach(b => lineTo(ctx, P[L.id], P[b], cHit, 3, 1));
+      }
+      P.forEach((p, i) => { const isPlaced = $("bMode").value === "bulk" ? placed > 0 : i < placed; dot(ctx, p[0], p[1], 3.5, isPlaced ? cInk : null, isPlaced ? null : cEdge, 1); });
+      ix.entries.forEach(e => dot(ctx, P[e][0], P[e][1], e === ix.medoid ? 7 : 4.5, cMiss, cSurf, 1.5));
+      if (L && L.id != null) dot(ctx, P[L.id][0], P[L.id][1], 8, cInk, cSurf, 2);
+    },
+    async auto() {
+      if (this.playing) { this.playing = false; return; }
+      this.playing = true; $("bAuto").textContent = "Pause";
+      while (this.playing && this.stepOnce()) { this.draw(); await sleep(520); }
+      this.playing = false; $("bAuto").textContent = "Play";
+      if (this.ix.n && this.next >= this.ix.n) { const err = this.ix.verify(); $("bNarr").textContent = "Graph complete: " + this.ix.n + " nodes, " + this.ix.edges.reduce((s, e) => s + e.length, 0) + " edges. Invariant check: " + (err || "every node has at most r edges, no self-edges, no duplicates") + "."; }
+    },
+  };
+  $("bNext").addEventListener("click", () => { if (!B.stepOnce()) $("bNarr").textContent = "All points are in the graph. Reset to start again."; B.draw(); });
+  $("bAuto").addEventListener("click", () => B.auto());
+  $("bReset").addEventListener("click", () => { B.playing = false; B.reset(); });
+  for (const [id, out] of [["bN", "bNv"], ["bR", "bRv"], ["bA", "bAv"], ["bL", "bLv"]]) $(id).addEventListener("input", () => { $(out).textContent = $(id).value; });
+  ["bN", "bR", "bA", "bL", "bMode", "bSeed"].forEach(id => $(id).addEventListener("change", () => { B.playing = false; B.reset(); }));
+
+  // ---------- MEASURE ----------
+  function lineChart(el, xs, series, ylab, yMin, yMax) {
+    const W = 520, H = 260, l = 54, r = 16, t = 14, b = 42;
+    const allY = series.flatMap(s => s.ys).filter(v => v != null);
+    const y0 = yMin != null ? yMin : Math.min(...allY), y1 = yMax != null ? yMax : Math.max(...allY) * 1.08 || 1;
+    const lx = xs.map(x => Math.log(x)), x0 = Math.min(...lx), x1 = Math.max(...lx);
+    const X = x => l + (x1 === x0 ? (W - l - r) / 2 : (Math.log(x) - x0) / (x1 - x0) * (W - l - r)), Y = y => t + (1 - (y - y0) / ((y1 - y0) || 1)) * (H - t - b);
+    let s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(ylab) + '">';
+    for (let i = 0; i <= 4; i++) { const yv = y0 + (y1 - y0) * i / 4, yy = Y(yv); s += '<line x1="' + l + '" x2="' + (W - r) + '" y1="' + yy + '" y2="' + yy + '" stroke="var(--line)"/><text x="' + (l - 6) + '" y="' + (yy + 4) + '" text-anchor="end" font-size="11" fill="var(--ink-2)">' + (Math.abs(y1) < 10 ? yv.toFixed(2) : Math.round(yv)) + "</text>"; }
+    xs.forEach(x => { s += '<text x="' + X(x) + '" y="' + (H - b + 16) + '" text-anchor="middle" font-size="11" fill="var(--ink-2)">' + x + "</text>"; });
+    s += '<text x="' + ((l + W - r) / 2) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="12" fill="var(--ink-2)">ef_search (log scale)</text>';
+    series.forEach(se => { const pts = xs.map((x, i) => [X(x), Y(se.ys[i])]); s += '<polyline fill="none" stroke="' + se.color + '" stroke-width="2.5" points="' + pts.map(p => p.join(",")).join(" ") + '"/>' + pts.map((p, i) => '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="4" fill="' + se.color + '"><title>ef ' + xs[i] + ": " + se.ys[i] + "</title></circle>").join(""); });
+    el.innerHTML = s + "</svg>";
+  }
+  const pct = (a, p) => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.max(0, Math.ceil(p / 100 * s.length) - 1))] : 0; };
+  $("mRun").addEventListener("click", async () => {
+    const btn = $("mRun"); btn.disabled = true; const prog = p => { $("mProg").style.width = Math.round(p * 100) + "%"; };
+    const k = Math.max(1, +$("mK").value), efs = $("mEf").value.split(",").map(x => +x.trim()).filter(x => x >= k).sort((a, b) => a - b), nq = Math.max(1, Math.min(1000, +$("mQ").value));
+    const rows = [];
+    try {
+      if (S.mode === "sim") {
+        const n = +$("mN").value, dim = +$("mDim").value, metric = $("mMetric").value;
+        $("mStatus").textContent = "Generating data…"; await sleep(20);
+        const g = RK.generate(n, dim, 42, $("mDist").value, nq);
+        const ix = new RK.Index({ dim, metric, r: +$("mR").value, alpha: 1.2, l_build: +$("mL").value, entry_points: 64 });
+        g.base.forEach((v, i) => ix.store("v" + i, v)); const es = new Set(ix.selectEntries(true));
+        const t0 = performance.now();
+        for (let i = 0; i < ix.n; i++) { if (!es.has(i)) ix.linkExisting(i); if (i % 50 === 0) { prog(0.6 * i / ix.n); $("mStatus").textContent = "Building the graph: " + i + " of " + ix.n + " nodes linked"; await sleep(0); } }
+        const buildS = (performance.now() - t0) / 1000;
+        const truth = g.queries.map(q => new Set(ix.exact(q, k).map(h => h.id)));
+        for (const [ei, ef] of efs.entries()) {
+          g.queries.forEach(q => ix.search(q, k, ef));
+          let rec = 0, vis = 0, exp = 0; const lat = [];
+          g.queries.forEach((q, qi) => { const t = performance.now(); const o = ix.search(q, k, ef); lat.push((performance.now() - t) * 1000); rec += o.hits.filter(h => truth[qi].has(h.id)).length / Math.min(k, ix.n); vis += o.stats.visited; exp += o.stats.expanded; });
+          rows.push({ ef, recall: rec / nq, vis: vis / nq, exp: exp / nq, p50: pct(lat, 50), p95: pct(lat, 95) });
+          prog(0.6 + 0.4 * (ei + 1) / efs.length); await sleep(0);
+        }
+        $("mStatus").textContent = "Built " + ix.n + " × " + dim + "d (" + metric + ", r = " + ix.r + ", l_build = " + ix.L + ") in " + buildS.toFixed(2) + " s of JavaScript; " + nq + " held-out queries.";
+        $("mLatNote").textContent = "Simulation: JavaScript timings in this browser, not RiskANN performance. Run riskann-bench for real numbers.";
+      } else {
+        const name = $("mColl").value; if (!name) throw new Error("No collection selected.");
+        $("mStatus").textContent = "Fetching vectors…";
+        const snap = (await api("GET", "/collections/" + name + "/graph?limit=5000")).json;
+        if (!snap.nodes || !snap.nodes.length) throw new Error("The collection is empty.");
+        const vs = snap.nodes.map(x => x.vector), sd = Math.sqrt(vs.flat().reduce((s, x) => s + x * x, 0) / vs.flat().length) || 1;
+        const qs = Array.from({ length: nq }, (_, i) => vs[(i * 7919) % vs.length].map((x, j) => x + 0.08 * sd * Math.sin(31 * i + 7 * j)));
+        const truth = [];
+        for (const [i, q] of qs.entries()) { const r = await api("POST", "/collections/" + name + "/search/exact", { vector: q, k }); truth.push(new Set(r.json.results.map(h => h.internal_id))); if (i % 5 === 0) prog(0.3 * i / nq); }
+        for (const [ei, ef] of efs.entries()) {
+          let rec = 0, vis = 0, exp = 0; const lat = [];
+          for (const [qi, q] of qs.entries()) { const r = await api("POST", "/collections/" + name + "/search", { vector: q, k, ef_search: ef }); const j = r.json; lat.push(j.stats.search_duration_us); rec += j.results.filter(h => truth[qi].has(h.internal_id)).length / Math.min(k, snap.count); vis += j.stats.visited_nodes; exp += j.stats.expanded_nodes; }
+          rows.push({ ef, recall: rec / nq, vis: vis / nq, exp: exp / nq, p50: pct(lat, 50), p95: pct(lat, 95) });
+          prog(0.3 + 0.7 * (ei + 1) / efs.length);
+        }
+        $("mStatus").textContent = "Measured on the live server: collection " + name + " (" + snap.count + " vectors), " + nq + " queries.";
+        $("mLatNote").textContent = "Server-reported engine time (search_duration_us), excluding HTTP.";
+      }
+      const xs = rows.map(r => r.ef);
+      lineChart($("mChartRecall"), xs, [{ ys: rows.map(r => +r.recall.toFixed(4)), color: "var(--hit)" }], "Recall@k", Math.min(0.5, ...rows.map(r => r.recall)), 1);
+      lineChart($("mChartVisited"), xs, [{ ys: rows.map(r => Math.round(r.vis)), color: "var(--beam)" }, { ys: rows.map(r => Math.round(r.exp)), color: "var(--truth)" }], "Nodes", 0);
+      lineChart($("mChartLat"), xs, [{ ys: rows.map(r => +r.p50.toFixed(1)), color: "var(--accent)" }], "Latency µs", 0);
+      $("mTable").innerHTML = rows.map(r => '<tr><td class="num">' + r.ef + '</td><td class="num">' + r.recall.toFixed(4) + '</td><td class="num">' + r.vis.toFixed(1) + '</td><td class="num">' + r.exp.toFixed(1) + '</td><td class="num">' + r.p50.toFixed(1) + ' µs</td><td class="num">' + r.p95.toFixed(1) + " µs</td></tr>").join("");
+    } catch (e) { $("mStatus").textContent = "Measurement stopped: " + e.message; }
+    btn.disabled = false;
+  });
+
+  // ---------- INGEST ----------
+  function genJsonl() {
+    const g = RK.generate(2000, 3, 11, "clustered", 0);
+    const lines = g.base.map((v, i) => JSON.stringify({ id: "row-" + i, vector: v }));
+    lines[499] = '{"id":"row-499","vector":[1.0, 2.0]}';
+    lines[1299] = "this line is not JSON";
+    $("iText").value = lines.join("\n");
+  }
+  $("iGen").addEventListener("click", genJsonl);
+  function paintJob(j) {
+    document.querySelectorAll("#iSm g[data-s]").forEach(g => { g.classList.remove("on", "done", "fail"); });
+    const g = document.querySelector('#iSm g[data-s="' + j.state + '"]');
+    if (g) g.classList.add(j.state === "completed" ? "done" : j.state === "failed" ? "fail" : "on");
+    const total = Math.max(1, (j.records_read || 0));
+    $("iProg").style.width = (j.state === "completed" || j.state === "failed" ? 100 : Math.min(98, j.nodes_linked ? 50 + 50 * j.nodes_linked / Math.max(1, j.records_inserted) : 50 * total / Math.max(total, 2000))) + "%";
+    $("iStats").innerHTML = ["state", "mode", "records_read", "records_inserted", "records_updated", "records_rejected", "current_line", "nodes_linked"].map(k => "<span>" + k.replace(/_/g, " ") + "</span><b>" + esc(j[k] == null ? "–" : j[k]) + "</b>").join("") + (j.error ? '<span>error</span><b class="tag bad" style="text-align:left">' + esc(j.error) + "</b>" : "");
+    $("iRej").innerHTML = (j.rejected_samples || []).map(r => '<tr><td class="num">' + r.line + "</td><td>" + esc(r.reason) + "</td></tr>").join("");
+    $("iJson").textContent = JSON.stringify(j, null, 2);
+  }
+  $("iStart").addEventListener("click", async () => {
+    const btn = $("iStart"); btn.disabled = true;
+    try {
+      const name = $("iColl").value.trim(), dim = +$("iDim").value;
+      let path;
+      if (S.mode === "sim") { path = "/sim/files/upload.jsonl"; S.sim.files.set(path, $("iText").value); } else path = $("iPath").value.trim();
+      const exists = await api("GET", "/collections/" + encodeURIComponent(name));
+      if (exists.status === 404) { const c = await api("PUT", "/collections/" + encodeURIComponent(name), { dim, metric: "L2", r: 16, alpha: 1.2 }); if (c.status !== 201) throw new Error(c.json.error.code + ": " + c.json.error.message); }
+      else if (exists.status !== 200) throw new Error(exists.json.error.code + ": " + exists.json.error.message);
+      const r = await api("POST", "/collections/" + encodeURIComponent(name) + "/ingest", { path, on_error: $("iOnErr").value });
+      if (r.status !== 202) throw new Error(r.json.error.code + ": " + r.json.error.message);
+      paintJob({ state: "queued", job_id: r.json.job_id });
+      for (;;) { const j = (await api("GET", r.json.status_url)).json; paintJob(j); if (j.state === "completed" || j.state === "failed") break; await sleep(200); }
+      refreshCollections();
+    } catch (e) { $("iJson").textContent = "Could not start the job: " + e.message; }
+    btn.disabled = false;
+  });
+
+  // ---------- STORAGE ----------
+  const ST = {
+    snap: null, info: null, sel: null, layout: null,
+    async load() {
+      const name = $("sColl").value; if (!name) return;
+      const [i, g] = await Promise.all([api("GET", "/collections/" + name), api("GET", "/collections/" + name + "/graph?limit=5000")]);
+      if (i.status !== 200 || g.status !== 200) return;
+      this.info = i.json.collection; this.snap = g.json; this.sel = null;
+      const c = this.info;
+      $("sInfo").textContent = c.count + " live slots of " + c.capacity + " allocated (" + Math.round(100 * c.count / c.capacity) + "% used). vectors.bin = " + c.capacity + " × " + c.dim + " × 4 bytes; graph.bin = " + c.capacity + " × " + c.r + " × 4 bytes; " + c.disk_bytes.toLocaleString() + " bytes in total. Capacity doubles when full.";
+      $("sConfig").textContent = JSON.stringify({ dim: c.dim, metric: c.metric, r: c.r, alpha: c.alpha, l_build: c.l_build }, null, 2);
+      const ids = this.snap.nodes.map(n => n.id);
+      $("sMeta").textContent = JSON.stringify({ format_version: 1, medoid_id: c.entry_point, entry_points: (this.snap.entry_points || []).length > 12 ? this.snap.entry_points.slice(0, 12).concat(["… " + (this.snap.entry_points.length - 12) + " more"]) : this.snap.entry_points, next_id: c.count, capacity: c.capacity, external_ids: ids.length > 12 ? ids.slice(0, 12).concat(["… " + (ids.length - 12) + " more"]) : ids }, null, 2) + (S.mode === "live" ? "\n\n(reconstructed from the API; the file on disk has the same fields)" : "");
+      $("sSlot").textContent = "Select a slot."; $("sSlotTitle").textContent = "Slot details";
+      this.draw();
+    },
+    draw() {
+      const cv = $("sCanvas"); if (!cv.offsetParent || !this.info) return;
+      const { ctx, w, h } = setupCanvas(cv); ctx.clearRect(0, 0, w, h);
+      const cap = Math.min(this.info.capacity, 4096), cols = Math.ceil(Math.sqrt(cap * w / h)), size = Math.max(3, Math.floor(Math.min(w / cols, h / Math.ceil(cap / cols))));
+      this.layout = { cols, size, cap };
+      const cLive = css("--accent"), cFree = css("--surface-2"), cMiss = css("--miss"), cLine = css("--line"), cInk = css("--ink");
+      const ents = new Set(this.snap.entry_points || [this.info.entry_point]);
+      for (let i = 0; i < cap; i++) { const x = (i % cols) * size, y = Math.floor(i / cols) * size; ctx.fillStyle = ents.has(i) ? cMiss : i < this.info.count ? cLive : cFree; ctx.fillRect(x + 0.5, y + 0.5, size - 1, size - 1); if (size >= 8 && i >= this.info.count) { ctx.strokeStyle = cLine; ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1); } }
+      if (this.sel != null) { const x = (this.sel % cols) * size, y = Math.floor(this.sel / cols) * size; ctx.strokeStyle = cInk; ctx.lineWidth = 2; ctx.strokeRect(x, y, size, size); }
+    },
+    show(i) {
+      this.sel = i; this.draw(); const c = this.info;
+      const hex = buf => Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, "0")).join(" ");
+      $("sSlotTitle").textContent = "Slot " + i;
+      if (i >= c.count) { $("sSlot").innerHTML = "<p>Free slot. Its bytes in <code>vectors.bin</code> are unused, and its adjacency list in <code>graph.bin</code> is all <code>FFFFFFFF</code> (empty). It will be used by the next new id.</p>"; return; }
+      const node = this.snap.nodes[i];
+      if (!node) { $("sSlot").textContent = "This slot is beyond the first 5 000 nodes shown."; return; }
+      const fv = new Float32Array(node.vector), edges = this.snap.edges.filter(e => e[0] === i).map(e => e[1]);
+      const u = new Uint32Array(c.r).fill(0xFFFFFFFF); edges.forEach((e, j) => { u[j] = e; });
+      const show = arr => arr.length > 48 ? arr.slice(0, 48) + " …" : arr;
+      $("sSlot").innerHTML = "<p>External id <code>" + esc(node.id) + "</code>" + (i === c.entry_point ? ", the primary entry point (medoid)" : (this.snap.entry_points || []).includes(i) ? ", one of the entry points" : "") + ".</p>" +
+        "<h3>vectors.bin</h3><p class=\"muted\" style=\"font-size:.85rem\">bytes " + (i * c.dim * 4).toLocaleString() + " to " + ((i + 1) * c.dim * 4 - 1).toLocaleString() + "</p><pre class=\"json\">values: [" + esc(show(Array.from(fv, x => +x.toPrecision(6)).join(", "))) + "]\nbytes:  " + esc(show(hex(fv.buffer))) + "</pre>" +
+        "<h3 style=\"margin-top:.6rem\">graph.bin</h3><p class=\"muted\" style=\"font-size:.85rem\">bytes " + (i * c.r * 4).toLocaleString() + " to " + ((i + 1) * c.r * 4 - 1).toLocaleString() + "; " + edges.length + " of r = " + c.r + " used</p><pre class=\"json\">neighbours: [" + edges.join(", ") + "]\nu32 slots:  " + esc(Array.from(u, x => x === 0xFFFFFFFF ? "FFFFFFFF" : String(x)).join(" ")) + "</pre>";
+    },
+  };
+  $("sLoad").addEventListener("click", () => ST.load());
+  $("sColl").addEventListener("change", () => ST.load());
+  $("sCanvas").addEventListener("click", ev => { if (!ST.layout) return; const r = ev.target.getBoundingClientRect(); const { cols, size, cap } = ST.layout; const i = Math.floor((ev.clientY - r.top) / size) * cols + Math.floor((ev.clientX - r.left) / size); if (i >= 0 && i < cap) ST.show(i); });
+
+  // ---------- TESTS ----------
+  const RUST = [["crates/core/src/distances.rs", 11, "Metric values, symmetry, zero vectors, NaN and overflow, names"], ["crates/core/src/vamana.rs", 26, "Ordering, beam search on edge-case graphs, RobustPrune"], ["crates/storage/src/memory.rs", 15, "Create/reopen, bounds, edges, corrupt files, resize and repair"], ["crates/engine/src/collection.rs", 5, "Names, configs, query limits, legacy metadata"], ["crates/engine/src/ingest.rs", 5, "JSONL parsing, job states, path policy"], ["crates/engine/src/dataset.rs", 4, "SplitMix64, determinism"], ["crates/engine/tests/engine.rs", 28, "Recall (incl. the clustered-data regression), restart, growth, corruption, ingestion, concurrency, trace and graph snapshot"], ["crates/server/src/logging.rs", 1, "Request-id validation"], ["crates/server/tests/api.rs", 14, "Every endpoint and error code over HTTP, the console page"]];
+  $("tRust").innerHTML = RUST.map(r => "<tr><td><code>" + r[0] + '</code></td><td class="num">' + r[1] + "</td><td>" + r[2] + "</td></tr>").join("") + '<tr><td><b>Total</b></td><td class="num"><b>' + RUST.reduce((s, r) => s + r[1], 0) + "</b></td><td></td></tr>";
+  async function runSuite(label, list) {
+    const box = $("tList"); box.insertAdjacentHTML("beforeend", '<div class="g">' + esc(label) + "</div>");
+    let lastGroup = null;
+    const res = await RK.runTests(list, r => {
+      if (r.group !== lastGroup && list.some(t => t.group !== list[0].group)) { lastGroup = r.group; box.insertAdjacentHTML("beforeend", '<div class="muted" style="font-size:.8rem;margin-top:.4rem">' + esc(r.group) + "</div>"); }
+      box.insertAdjacentHTML("beforeend", '<div class="t"><span class="tag ' + (r.ok ? "ok" : "bad") + '">' + (r.ok ? "pass" : "fail") + "</span><span>" + esc(r.name) + (r.note ? '<br><span class="' + (r.ok ? "muted" : "") + '" style="font-size:.8rem">' + esc(r.note) + "</span>" : "") + '</span><span class="muted">' + r.ms.toFixed(0) + " ms</span></div>");
+      box.scrollTop = box.scrollHeight;
+    });
+    $("tSummary").insertAdjacentHTML("beforeend", '<span class="tag ' + (res.fail ? "bad" : "ok") + '">' + esc(label) + ": " + res.pass + " passed, " + res.fail + " failed</span>");
+  }
+  $("tAlgo").addEventListener("click", async e => { e.target.disabled = true; await runSuite("Algorithm tests (JavaScript port)", RK.algorithmTests()); e.target.disabled = false; });
+  $("tSim").addEventListener("click", async e => { e.target.disabled = true; await runSuite("API tests on the simulation", RK.apiTests(S.simClient)); e.target.disabled = false; refreshCollections(); });
+  $("tLive").addEventListener("click", async e => { e.target.disabled = true; await runSuite("API tests on the live RiskANN server", RK.apiTests(S.liveClient)); e.target.disabled = false; refreshCollections(); });
+
+  // ---------- ARCHITECTURE ----------
+  const ARCH = {
+    client: ["Client", "Anything that speaks HTTP and JSON: curl, this console, an application. Every response carries an x-request-id header that matches the server logs."],
+    server: ["server crate", "Axum routes on Tokio. The logging middleware gives each request an id and one access-log line. Bodies are size-limited and parsed into typed requests; unknown fields are rejected. Engine calls run on the blocking thread pool so the async runtime never stalls. Files: main.rs, lib.rs, logging.rs, error.rs, api/*.rs."],
+    engine: ["engine crate", "DBInfo holds the collections and ingestion jobs. Each Collection guards its storage, id maps and entry point with one RwLock: searches share it, writes take it alone. Upserts link new nodes into the graph and persist metadata atomically. Also: exact search, JSONL jobs, datasets and riskann-bench."],
+    core: ["riskann-core crate", "Pure algorithms with no storage dependency: L2 and cosine distances, the candidate order (distance, then id), bounded beam search, and RobustPrune. Storage is reached only through closures supplied by the engine."],
+    storage: ["storage crate", "DiskStore maps vectors.bin and graph.bin with memmap2. Every access is bounds-checked; writes need exclusive access; capacity comes from the file lengths; growth doubles both files and fills new adjacency slots with FFFFFFFF."],
+    files: ["Collection directory", "config.json (parameters), metadata.json (ids, entry point, counts; replaced atomically), vectors.bin and graph.bin (fixed-size slots)."],
+  };
+  const FLOWS = {
+    search: [["client", "The client sends POST /collections/{name}/search with a vector, k and ef_search."], ["server", "The middleware assigns a request id. The body is parsed and checked; unknown fields are rejected."], ["engine", "On a blocking thread the collection validates the vector and takes the read lock."], ["core", "Beam search starts at the entry point and expands the nearest candidates until the beam of size ef_search stops improving."], ["storage", "Each step reads a neighbour list from graph.bin and vectors from vectors.bin through checked slices."], ["engine", "Internal ids become external ids; the lock is released; a debug log records the work done."], ["server", "Slow queries are logged; the JSON response and x-request-id go back; the access log records status and latency."]],
+    upsert: [["client", "POST /collections/{name}/upsert with an id and a vector."], ["server", "Parse and validate; hand off to a blocking thread."], ["engine", "Take the write lock. A known id keeps its internal id; a new id gets the next slot (storage grows if full)."], ["storage", "Write the vector into its slot."], ["core", "Beam search for the new vector, then RobustPrune picks at most r diverse neighbours."], ["storage", "Write the forward edges and add reverse edges to each neighbour, re-pruning lists that exceed r."], ["files", "Flush both files, then replace metadata.json atomically (temp file, fsync, rename)."], ["server", "Return {id, internal_id, created}."]],
+    ingest: [["client", "POST /collections/{name}/ingest with an absolute server-side path."], ["server", "Check the path (absolute, existing file, inside RISKANN_INGEST_DIR if set). Register a queued job and return 202 with its id."], ["engine", "A blocking worker marks the job running and streams the file line by line inside an ingest_job log span."], ["storage", "Empty collection: store every vector first. Otherwise insert each record fully under the write lock."], ["core", "Initial build: choose the entry point nearest the centroid and link every node with beam search and RobustPrune."], ["files", "Persist at checkpoints and at the end."], ["client", "GET …/ingest/{job_id} shows completed or failed, the counters and any rejected lines with their numbers."]],
+  };
+  function selArch(k) { document.querySelectorAll("#archSvg .box").forEach(b => b.classList.toggle("on", b.dataset.k === k)); $("archTitle").textContent = ARCH[k][0]; $("archText").textContent = ARCH[k][1]; $("archText").classList.remove("muted"); }
+  document.querySelectorAll("#archSvg .box").forEach(b => { b.setAttribute("tabindex", "0"); b.addEventListener("click", () => selArch(b.dataset.k)); b.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selArch(b.dataset.k); } }); });
+  function renderFlow() { $("flowSteps").innerHTML = FLOWS[$("flowSel").value].map(s => "<li><b>" + esc(ARCH[s[0]][0]) + ".</b> " + esc(s[1]) + "</li>").join(""); }
+  $("flowSel").addEventListener("change", renderFlow);
+  $("flowPlay").addEventListener("click", async () => {
+    const steps = FLOWS[$("flowSel").value], lis = $("flowSteps").children;
+    for (let i = 0; i < steps.length; i++) { Array.from(lis).forEach((li, j) => li.classList.toggle("on", j === i)); selArch(steps[i][0]); await sleep(1300); }
+    Array.from(lis).forEach(li => li.classList.remove("on"));
+  });
+
+  // ---------- start ----------
+  window.addEventListener("resize", () => { EX.draw(EX.final && EX.step >= EX.events.length); B.draw(); ST.draw(); });
+  if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { EX.draw(EX.final && EX.step >= EX.events.length); B.draw(); ST.draw(); });
+  (async () => {
+    renderFlow(); genJsonl(); B.reset();
+    S.liveAvailable = await detectLive();
+    setMode(S.liveAvailable ? "live" : "sim");
+    route();
+    let list = await refreshCollections();
+    if (S.mode === "sim" && !list.length) {
+      $("exNarr").textContent = "Building a demo collection of 400 points in the simulation…";
+      await createDemo("demo_2d", 400, "clustered:8", 12, 7, p => { $("exProg").style.width = Math.round(p * 100) + "%"; });
+      list = await refreshCollections();
+    }
+    if (list.length) {
+      const name = list.some(c => c.name === "demo_2d") ? "demo_2d" : list[0].name;
+      $("exColl").value = name; await EX.load(name); $("sColl").value = name;
+      if (S.mode === "sim" && EX.snap && EX.snap.dim === 2) { const xs = EX.pts.map(p => p[0]), ys = EX.pts.map(p => p[1]); EX.search([Math.max(...xs) * 0.55, Math.min(...ys) * 0.4]); }
+    }
+  })();
+})();
+</script>
+</body>
+</html>

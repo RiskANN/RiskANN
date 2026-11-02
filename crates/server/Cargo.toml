@@ -2,6 +2,17 @@
 name = "server"
 version = "1.0.0"
 edition = "2024"
+rust-version = "1.85"
+description = "RiskANN HTTP API (Axum/Tokio)."
+license = "MIT"
+
+[lib]
+name = "server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "server"
+path = "src/main.rs"
 
 [dependencies]
 engine = { path = "../engine" }
@@ -10,3 +21,8 @@ tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 dotenvy = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

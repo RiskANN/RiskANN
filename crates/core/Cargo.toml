@@ -1,8 +1,20 @@
 [package]
-name = "core"
+name = "riskann-core"
 version = "1.0.0"
 edition = "2024"
+rust-version = "1.85"
+description = "RiskANN core algorithms: distance metrics, Vamana-inspired beam search and robust pruning."
+license = "MIT"
+
+# The package used to be called `core`, which shadows Rust's built-in `core`
+# crate inside every dependent crate (and inside this crate's own integration
+# tests). The directory name is unchanged; only the package/lib name differs.
+[lib]
+name = "riskann_core"
+path = "src/lib.rs"
 
 [dependencies]
-anndists = "0.1"
-serde = {workspace = true}
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
