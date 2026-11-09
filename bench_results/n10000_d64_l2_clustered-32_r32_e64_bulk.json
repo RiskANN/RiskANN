@@ -1,0 +1,124 @@
+{
+  "avg_out_degree": 31.5718,
+  "build_secs": 7.014570517,
+  "dataset": {
+    "dim": 64,
+    "distribution": "clustered:32",
+    "n": 10000,
+    "queries": 200,
+    "queries_held_out": true,
+    "seed": 42
+  },
+  "disk_bytes": 3919402,
+  "exact_baseline": {
+    "latency_us": {
+      "mean": 325.756785,
+      "p50": 323.291,
+      "p95": 354.021,
+      "p99": 371.761
+    },
+    "qps_single_thread": 3069.774893560544
+  },
+  "index": {
+    "alpha": 1.2000000476837158,
+    "build_mode": "bulk",
+    "entry_points": 64,
+    "l_build": 64,
+    "metric": "L2",
+    "r": 32
+  },
+  "k": 10,
+  "label": "n10000_d64_l2_clustered-32_r32_e64_bulk",
+  "machine": {
+    "arch": "x86_64",
+    "build_profile": "release",
+    "cpu_model": "AMD Ryzen 7 7735HS with Radeon Graphics",
+    "logical_cpus": 16,
+    "mem_total_kb": 15089256,
+    "os": "linux",
+    "riskann_version": "1.0.0"
+  },
+  "notes": "Latency measured around engine search calls (no HTTP). Recall@K = |ANN ∩ exact| / min(K, n).",
+  "peak_rss_kb": 13488,
+  "reload_ms": 3.873975,
+  "reload_results_identical": true,
+  "sweep": [
+    {
+      "avg_distance_computations": 240.995,
+      "avg_expanded_nodes": 11.49,
+      "avg_visited_nodes": 240.995,
+      "ef_search": 10,
+      "latency_us": {
+        "mean": 23.245300000000007,
+        "p50": 22.419,
+        "p95": 30.102,
+        "p99": 36.666
+      },
+      "qps_concurrent": null,
+      "qps_single_thread": 43019.4490929349,
+      "recall_at_k": 0.9485000000000012
+    },
+    {
+      "avg_distance_computations": 272.44,
+      "avg_expanded_nodes": 17.255,
+      "avg_visited_nodes": 272.44,
+      "ef_search": 16,
+      "latency_us": {
+        "mean": 27.60476500000001,
+        "p50": 26.259999999999998,
+        "p95": 37.783,
+        "p99": 43.79
+      },
+      "qps_concurrent": null,
+      "qps_single_thread": 36225.62988672425,
+      "recall_at_k": 0.9805000000000006
+    },
+    {
+      "avg_distance_computations": 316.56,
+      "avg_expanded_nodes": 33.055,
+      "avg_visited_nodes": 316.56,
+      "ef_search": 32,
+      "latency_us": {
+        "mean": 38.28336500000003,
+        "p50": 40.857,
+        "p95": 42.184000000000005,
+        "p99": 49.097
+      },
+      "qps_concurrent": null,
+      "qps_single_thread": 26121.005820674312,
+      "recall_at_k": 0.9955000000000002
+    },
+    {
+      "avg_distance_computations": 349.94,
+      "avg_expanded_nodes": 64.925,
+      "avg_visited_nodes": 349.94,
+      "ef_search": 64,
+      "latency_us": {
+        "mean": 48.54112500000002,
+        "p50": 48.050000000000004,
+        "p95": 57.828,
+        "p99": 62.507000000000005
+      },
+      "qps_concurrent": null,
+      "qps_single_thread": 20601.088252486927,
+      "recall_at_k": 1.0
+    },
+    {
+      "avg_distance_computations": 370.47,
+      "avg_expanded_nodes": 128.72,
+      "avg_visited_nodes": 370.47,
+      "ef_search": 128,
+      "latency_us": {
+        "mean": 61.252440000000036,
+        "p50": 59.643,
+        "p95": 71.02799999999999,
+        "p99": 78.361
+      },
+      "qps_concurrent": null,
+      "qps_single_thread": 16325.880242485024,
+      "recall_at_k": 1.0
+    }
+  ],
+  "threads": 1,
+  "warmup_passes": 1
+}

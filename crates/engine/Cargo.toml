@@ -2,12 +2,19 @@
 name = "engine"
 version = "1.0.0"
 edition = "2024"
+rust-version = "1.85"
+description = "RiskANN engine: collections, ID mapping, indexing, retrieval, ingestion jobs and benchmarks."
+license = "MIT"
+autobins = false
 
 [dependencies]
 storage = { path = "../storage" }
-core = { path = "../core" }
+riskann-core = { path = "../core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 dashmap = { workspace = true }
-tokio = { workspace = true }
+tracing = { workspace = true }
 
+[[bin]]
+name = "riskann-bench"
+path = "src/bin/riskann_bench.rs"
