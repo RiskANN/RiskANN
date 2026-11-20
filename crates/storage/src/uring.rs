@@ -1,8 +1,8 @@
 //! io_uring-backed vector and adjacency storage backend.
 //!
 //! Uses io_uring positional read/write submissions. Single-record methods wait
-//! for one completion; batch methods submit up to QUEUE_DEPTH independent
-//! operations together. The public API remains synchronous.
+//! for one completion; batch methods submit independent operations together
+//! up to the configured queue depth and batch size. The public API remains synchronous.
 
 use crate::common::{io_err, OpenReport, StorageError, EMPTY_EDGE, GRAPH_FILE, MAX_CAPACITY, VECTORS_FILE};
 use std::collections::HashSet;
@@ -16,7 +16,50 @@ use std::path::Path;
 
 const F32_BYTES: usize = std::mem::size_of::<f32>();
 const U32_BYTES: usize = std::mem::size_of::<u32>();
-const QUEUE_DEPTH: usize = 8;
+const DEFAULT_QUEUE_DEPTH: usize = 8;
+const DEFAULT_BATCH_SIZE: usize = 8;
+
+/// Runtime tuning for the io_uring backend.
+///
+/// `queue_depth` controls the maximum number of operations submitted in one
+/// in-flight group. `batch_size` controls how many requests a batch API call
+/// groups before moving to the next group. The effective submission size is
+/// `min(queue_depth, batch_size)`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct IoUringConfig {
+    queue_depth: usize,
+    batch_size: usize,
+}
+
+impl Default for IoUringConfig {
+    fn default() -> Self {
+        Self {
+            queue_depth: DEFAULT_QUEUE_DEPTH,
+            batch_size: DEFAULT_BATCH_SIZE,
+        }
+    }
+}
+
+impl IoUringConfig {
+    /// Creates a configuration. Both values must be greater than zero.
+    pub fn new(queue_depth: usize, batch_size: usize) -> Result<Self, StorageError> {
+        if queue_depth == 0 {
+            return Err(StorageError::InvalidArgument("io_uring queue depth must be > 0".into()));
+        }
+        if batch_size == 0 {
+            return Err(StorageError::InvalidArgument("io_uring batch size must be > 0".into()));
+        }
+        u32::try_from(queue_depth).map_err(|_| StorageError::Overflow("io_uring queue depth"))?;
+        Ok(Self { queue_depth, batch_size })
+    }
+
+    pub fn queue_depth(&self) -> usize { self.queue_depth }
+    pub fn batch_size(&self) -> usize { self.batch_size }
+
+    fn submission_size(&self) -> usize {
+        self.queue_depth.min(self.batch_size)
+    }
+}
 
 fn strides(dim: usize, r: usize) -> Result<(usize, usize), StorageError> {
     if dim == 0 { return Err(StorageError::InvalidArgument("dim must be > 0".into())); }
@@ -60,6 +103,7 @@ pub struct IoUringDiskStore {
     capacity: u32,
     vec_stride: usize,
     graph_stride: usize,
+    config: IoUringConfig,
 }
 
 impl fmt::Debug for IoUringDiskStore {
@@ -68,6 +112,8 @@ impl fmt::Debug for IoUringDiskStore {
             .field("dim", &self.dim)
             .field("r", &self.r)
             .field("capacity", &self.capacity)
+            .field("queue_depth", &self.config.queue_depth)
+            .field("batch_size", &self.config.batch_size)
             .finish()
     }
 }
@@ -174,7 +220,7 @@ struct BatchRequest {
     offset: u64,
 }
 
-/// Submits up to QUEUE_DEPTH independent operations and returns results in
+/// Submits up to `queue_depth` independent operations and returns results in
 /// request order. The caller owns and keeps all pointed-to buffers alive until
 /// this function returns.
 fn submit_batch_once(
@@ -182,10 +228,11 @@ fn submit_batch_once(
     file: &File,
     requests: &[BatchRequest],
     is_write: bool,
+    queue_depth: usize,
     context: &str,
 ) -> Result<Vec<i32>, StorageError> {
     debug_assert!(!requests.is_empty());
-    debug_assert!(requests.len() <= QUEUE_DEPTH);
+    debug_assert!(requests.len() <= queue_depth);
 
     for (index, request) in requests.iter().enumerate() {
         let len = u32::try_from(request.len)
@@ -283,11 +330,25 @@ fn fill_file_range(ring: &mut IoUring, file: &File, start: u64, len: u64, byte: 
 }
 
 impl IoUringDiskStore {
-    /// Creates the two storage files. Existing files are never overwritten.
+    /// Creates the two storage files using the default io_uring configuration.
+    /// Existing files are never overwritten.
     pub fn create_new(dir: &Path, dim: usize, r: usize, capacity: u32) -> Result<Self, StorageError> {
+        Self::create_new_with_config(dir, dim, r, capacity, IoUringConfig::default())
+    }
+
+    /// Creates the two storage files using an explicit io_uring configuration.
+    pub fn create_new_with_config(
+        dir: &Path,
+        dim: usize,
+        r: usize,
+        capacity: u32,
+        config: IoUringConfig,
+    ) -> Result<Self, StorageError> {
         let (vec_stride, graph_stride) = strides(dim, r)?;
         validate_capacity(capacity)?;
-        let ring = IoUring::new(QUEUE_DEPTH as u32).map_err(io_err("create io_uring instance".into()))?;
+        let entries = u32::try_from(config.queue_depth)
+            .map_err(|_| StorageError::Overflow("io_uring queue depth"))?;
+        let ring = IoUring::new(entries).map_err(io_err("create io_uring instance".into()))?;
         let ring = Mutex::new(ring);
         let vec_len = byte_len(capacity, vec_stride)?;
         let graph_len = byte_len(capacity, graph_stride)?;
@@ -305,13 +366,27 @@ impl IoUringDiskStore {
             fill_file_range(&mut ring_guard, &graph_file, 0, graph_len, 0xFF, GRAPH_FILE)?;
         }
 
-        Ok(Self { ring, vec_file, graph_file, dim, r, capacity, vec_stride, graph_stride })
+        Ok(Self { ring, vec_file, graph_file, dim, r, capacity, vec_stride, graph_stride, config })
     }
 
-    /// Opens existing files and grows the shorter one if a previous resize was interrupted.
+    /// Opens existing files using the default io_uring configuration.
+    /// Grows the shorter file if a previous resize was interrupted.
     pub fn open_existing(dir: &Path, dim: usize, r: usize, required_slots: u32) -> Result<(Self, OpenReport), StorageError> {
+        Self::open_existing_with_config(dir, dim, r, required_slots, IoUringConfig::default())
+    }
+
+    /// Opens existing files using an explicit io_uring configuration.
+    pub fn open_existing_with_config(
+        dir: &Path,
+        dim: usize,
+        r: usize,
+        required_slots: u32,
+        config: IoUringConfig,
+    ) -> Result<(Self, OpenReport), StorageError> {
         let (vec_stride, graph_stride) = strides(dim, r)?;
-        let ring = Mutex::new(IoUring::new(QUEUE_DEPTH as u32).map_err(io_err("create io_uring instance".into()))?);
+        let entries = u32::try_from(config.queue_depth)
+            .map_err(|_| StorageError::Overflow("io_uring queue depth"))?;
+        let ring = Mutex::new(IoUring::new(entries).map_err(io_err("create io_uring instance".into()))?);
         let vec_path = dir.join(VECTORS_FILE);
         let graph_path = dir.join(GRAPH_FILE);
         let vec_file = OpenOptions::new().read(true).write(true).open(&vec_path)
@@ -342,7 +417,7 @@ impl IoUringDiskStore {
             let mut ring_guard = lock_ring(&ring)?;
             fill_file_range(&mut ring_guard, &graph_file, graph_len, new_len - graph_len, 0xFF, GRAPH_FILE)?;
         }
-        Ok((Self { ring, vec_file, graph_file, dim, r, capacity, vec_stride, graph_stride }, OpenReport {
+        Ok((Self { ring, vec_file, graph_file, dim, r, capacity, vec_stride, graph_stride, config }, OpenReport {
             vectors_capacity: cap_v, graph_capacity: cap_g, repaired,
         }))
     }
@@ -350,6 +425,9 @@ impl IoUringDiskStore {
     pub fn dim(&self) -> usize { self.dim }
     pub fn r(&self) -> usize { self.r }
     pub fn capacity(&self) -> u32 { self.capacity }
+    pub fn config(&self) -> IoUringConfig { self.config }
+    pub fn queue_depth(&self) -> usize { self.config.queue_depth }
+    pub fn batch_size(&self) -> usize { self.config.batch_size }
 
     /// Total logical bytes occupied by the two files.
     pub fn disk_usage_bytes(&self) -> u64 {
@@ -399,8 +477,8 @@ impl IoUringDiskStore {
         }
         let mut ring = lock_ring(&self.ring)?;
 
-        for base in (0..node_ids.len()).step_by(QUEUE_DEPTH) {
-            let end = (base + QUEUE_DEPTH).min(node_ids.len());
+        for base in (0..node_ids.len()).step_by(self.config.submission_size()) {
+            let end = (base + self.config.submission_size()).min(node_ids.len());
             let requests = outputs[base..end].iter_mut().zip(&offsets[base..end])
                 .map(|(output, &offset)| BatchRequest {
                     ptr: bytemuck::cast_slice_mut(output.as_mut_slice()).as_mut_ptr(),
@@ -408,7 +486,7 @@ impl IoUringDiskStore {
                     offset,
                 })
                 .collect::<Vec<_>>();
-            let results = submit_batch_once(&mut ring, &self.vec_file, &requests, false, VECTORS_FILE)?;
+            let results = submit_batch_once(&mut ring, &self.vec_file, &requests, false, self.config.queue_depth, VECTORS_FILE)?;
             drop(requests);
 
             for (relative, result) in results.into_iter().enumerate() {
@@ -464,8 +542,8 @@ impl IoUringDiskStore {
         }
 
         let mut ring = lock_ring(&self.ring)?;
-        for base in (0..writes.len()).step_by(QUEUE_DEPTH) {
-            let end = (base + QUEUE_DEPTH).min(writes.len());
+        for base in (0..writes.len()).step_by(self.config.submission_size()) {
+            let end = (base + self.config.submission_size()).min(writes.len());
             let requests = writes[base..end].iter().zip(&offsets[base..end])
                 .map(|((_, vector), &offset)| BatchRequest {
                     ptr: bytemuck::cast_slice::<f32, u8>(vector).as_ptr() as *mut u8,
@@ -473,7 +551,7 @@ impl IoUringDiskStore {
                     offset,
                 })
                 .collect::<Vec<_>>();
-            let results = submit_batch_once(&mut ring, &self.vec_file, &requests, true, VECTORS_FILE)?;
+            let results = submit_batch_once(&mut ring, &self.vec_file, &requests, true, self.config.queue_depth, VECTORS_FILE)?;
             drop(requests);
 
             for (relative, result) in results.into_iter().enumerate() {
@@ -537,8 +615,8 @@ impl IoUringDiskStore {
         }
         let mut ring = lock_ring(&self.ring)?;
 
-        for base in (0..node_ids.len()).step_by(QUEUE_DEPTH) {
-            let end = (base + QUEUE_DEPTH).min(node_ids.len());
+        for base in (0..node_ids.len()).step_by(self.config.submission_size()) {
+            let end = (base + self.config.submission_size()).min(node_ids.len());
             let requests = outputs[base..end].iter_mut().zip(&offsets[base..end])
                 .map(|(edges, &offset)| BatchRequest {
                     ptr: bytemuck::cast_slice_mut(edges.as_mut_slice()).as_mut_ptr(),
@@ -546,7 +624,7 @@ impl IoUringDiskStore {
                     offset,
                 })
                 .collect::<Vec<_>>();
-            let results = submit_batch_once(&mut ring, &self.graph_file, &requests, false, GRAPH_FILE)?;
+            let results = submit_batch_once(&mut ring, &self.graph_file, &requests, false, self.config.queue_depth, GRAPH_FILE)?;
             drop(requests);
 
             for (relative, result) in results.into_iter().enumerate() {
@@ -617,8 +695,8 @@ impl IoUringDiskStore {
         }
 
         let mut ring = lock_ring(&self.ring)?;
-        for base in (0..writes.len()).step_by(QUEUE_DEPTH) {
-            let end = (base + QUEUE_DEPTH).min(writes.len());
+        for base in (0..writes.len()).step_by(self.config.submission_size()) {
+            let end = (base + self.config.submission_size()).min(writes.len());
             let requests = padded[base..end].iter()
                 .zip(&offsets[base..end])
                 .map(|(edges, &offset)| BatchRequest {
@@ -627,7 +705,7 @@ impl IoUringDiskStore {
                     offset,
                 })
                 .collect::<Vec<_>>();
-            let results = submit_batch_once(&mut ring, &self.graph_file, &requests, true, GRAPH_FILE)?;
+            let results = submit_batch_once(&mut ring, &self.graph_file, &requests, true, self.config.queue_depth, GRAPH_FILE)?;
             drop(requests);
 
             for (relative, result) in results.into_iter().enumerate() {
@@ -789,6 +867,49 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn configurable_queue_depth_and_batch_size_work_independently() {
+        let dir = TempDir::new();
+        let config = IoUringConfig::new(4, 2).unwrap();
+        let mut store = IoUringDiskStore::create_new_with_config(dir.path(), 2, 2, 12, config).unwrap();
+        assert_eq!(store.queue_depth(), 4);
+        assert_eq!(store.batch_size(), 2);
+        assert_eq!(store.config(), config);
+
+        let vectors = (0..10u32)
+            .map(|id| (id, [id as f32, id as f32 + 0.5]))
+            .collect::<Vec<_>>();
+        let writes = vectors.iter().map(|(id, vector)| (*id, vector.as_slice())).collect::<Vec<_>>();
+        store.write_vectors_batch(&writes).unwrap();
+        let ids = (0..10u32).collect::<Vec<_>>();
+        let outputs = store.read_vectors_batch(&ids).unwrap();
+        for (id, output) in ids.iter().zip(outputs) {
+            assert_eq!(output, vec![*id as f32, *id as f32 + 0.5]);
+        }
+
+        let reopened = IoUringDiskStore::open_existing_with_config(dir.path(), 2, 2, 10, config).unwrap().0;
+        assert_eq!(reopened.config(), config);
+    }
+
+    #[test]
+    fn configurable_batch_size_is_capped_by_queue_depth() {
+        let dir = TempDir::new();
+        let config = IoUringConfig::new(2, 5).unwrap();
+        let mut store = IoUringDiskStore::create_new_with_config(dir.path(), 1, 1, 8, config).unwrap();
+        let values = (0..8u32).map(|id| (id, [id as f32])).collect::<Vec<_>>();
+        let writes = values.iter().map(|(id, value)| (*id, value.as_slice())).collect::<Vec<_>>();
+        store.write_vectors_batch(&writes).unwrap();
+        let ids = (0..8u32).collect::<Vec<_>>();
+        let outputs = store.read_vectors_batch(&ids).unwrap();
+        assert_eq!(outputs.into_iter().map(|v| v[0]).collect::<Vec<_>>(), (0..8).map(|v| v as f32).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn io_uring_config_rejects_zero_values() {
+        assert!(IoUringConfig::new(0, 1).is_err());
+        assert!(IoUringConfig::new(1, 0).is_err());
     }
 
     #[test]
