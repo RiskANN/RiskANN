@@ -145,12 +145,15 @@ impl BufferedDiskStore {
         let graph_len = graph_file.metadata().map_err(io_err(format!("stat {}", graph_path.display())))?.len();
         let cap_v = capacity_from_len(vec_len, vec_stride, VECTORS_FILE)?;
         let cap_g = capacity_from_len(graph_len, graph_stride, GRAPH_FILE)?;
-        if cap_v < required_slots || cap_g < required_slots {
+        // A resize can be interrupted after one file has grown. Validate the
+        // metadata requirement against the larger on-disk capacity, then grow
+        // the shorter file to match it below.
+        let capacity = cap_v.max(cap_g);
+        if capacity < required_slots {
             return Err(StorageError::Corrupt(format!(
                 "metadata references {required_slots} vectors but {VECTORS_FILE} holds {cap_v} slots and {GRAPH_FILE} holds {cap_g}"
             )));
         }
-        let capacity = cap_v.max(cap_g);
         let repaired = cap_v != cap_g;
         if cap_v < capacity {
             vec_file.set_len(byte_len(capacity, vec_stride)?)
@@ -574,7 +577,7 @@ mod tests {
             .unwrap()
             .set_len(8 * 8)
             .unwrap();
-        let (s, report) = BufferedDiskStore::open_existing(dir.path(), 2, 2, 4).unwrap();
+        let (s, report) = BufferedDiskStore::open_existing(dir.path(), 2, 2, 8).unwrap();
         assert!(report.repaired);
         assert_eq!(report.vectors_capacity, 8);
         assert_eq!(report.graph_capacity, 4);
