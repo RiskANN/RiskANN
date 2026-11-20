@@ -9,8 +9,10 @@ license = "MIT"
 [dependencies]
 memmap2 = { workspace = true, optional = true }
 bytemuck = { workspace = true }
+io-uring = { version = "0.7", optional = true }
 
 [features]
 default = ["mmap"]
 disk = []
 mmap = ["dep:memmap2"]
+io-uring = ["disk", "dep:io-uring"]

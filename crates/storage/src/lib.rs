@@ -12,3 +12,8 @@ pub use memory::DiskStore;
 pub mod buffered;
 #[cfg(feature = "disk")]
 pub use buffered::BufferedDiskStore;
+
+#[cfg(feature = "io-uring")]
+pub mod uring;
+#[cfg(feature = "io-uring")]
+pub use uring::IoUringDiskStore;
