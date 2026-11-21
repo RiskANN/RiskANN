@@ -156,6 +156,7 @@ fn submit_and_wait(ring: &mut IoUring, entry: squeue::Entry, context: &str) -> R
     Ok(result)
 }
 
+#[cfg(not(all(feature = "direct-io", target_os = "linux")))]
 fn buffered_read_exact_at(
     ring: &mut IoUring,
     file: &File,
@@ -186,6 +187,7 @@ fn buffered_read_exact_at(
     Ok(())
 }
 
+#[cfg(not(all(feature = "direct-io", target_os = "linux")))]
 fn buffered_write_all_at(
     ring: &mut IoUring,
     file: &File,
@@ -372,10 +374,11 @@ fn submit_batch_once(
             }
             results.push(i32::try_from(request.len).map_err(|_| StorageError::Overflow("direct batch result"))?);
         }
-        return Ok(results);
+        Ok(results)
     }
 
     #[cfg(not(all(feature = "direct-io", target_os = "linux")))]
+    {
     for (index, request) in requests.iter().enumerate() {
         let len = u32::try_from(request.len)
             .map_err(|_| StorageError::Overflow("batch I/O length"))?;
@@ -447,6 +450,7 @@ fn submit_batch_once(
             io::Error::new(io::ErrorKind::Other, "missing io_uring completion"),
         ))
     }).collect()
+    }
 }
 
 fn lock_ring(ring: &Mutex<IoUring>) -> Result<std::sync::MutexGuard<'_, IoUring>, StorageError> {
