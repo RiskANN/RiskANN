@@ -17,3 +17,11 @@ pub use buffered::BufferedDiskStore;
 pub mod uring;
 #[cfg(feature = "io-uring")]
 pub use uring::{IoUringConfig, IoUringDiskStore};
+
+#[cfg(all(feature = "direct-io", target_os = "linux"))]
+pub mod direct_io;
+#[cfg(all(feature = "direct-io", target_os = "linux"))]
+pub use direct_io::{AlignedBuffer, DirectIoAlignment};
+
+#[cfg(all(feature = "direct-io", not(target_os = "linux")))]
+compile_error!("the direct-io feature currently requires Linux");

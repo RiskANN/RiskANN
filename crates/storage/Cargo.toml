@@ -10,9 +10,11 @@ license = "MIT"
 memmap2 = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 io-uring = { version = "0.7", optional = true }
+libc = { version = "0.2", optional = true }
 
 [features]
 default = ["mmap"]
 disk = []
 mmap = ["dep:memmap2"]
 io-uring = ["disk", "dep:io-uring"]
+direct-io = ["disk", "dep:libc"]

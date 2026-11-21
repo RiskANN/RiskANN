@@ -626,6 +626,7 @@ version = "1.0.0"
 dependencies = [
  "bytemuck",
  "io-uring",
+ "libc",
  "memmap2",
 ]
 
