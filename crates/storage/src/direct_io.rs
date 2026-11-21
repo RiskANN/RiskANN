@@ -50,12 +50,20 @@ impl DirectIoAlignment {
                 source: io::Error::last_os_error(),
             });
         }
+
         if stat.stx_mask & libc::STATX_DIOALIGN != libc::STATX_DIOALIGN {
-            return Err(StorageError::InvalidArgument(
-                "filesystem/kernel did not report STATX_DIOALIGN; direct I/O alignment cannot be determined safely".into(),
-            ));
+            eprintln!(
+                "warning: STATX_DIOALIGN unavailable; \
+                 assuming 4096-byte memory and offset alignment"
+            );
+
+            return Self::new(4096, 4096);
         }
-        Self::new(stat.stx_dio_mem_align as usize, stat.stx_dio_offset_align as usize)
+
+        Self::new(
+            stat.stx_dio_mem_align as usize,
+            stat.stx_dio_offset_align as usize,
+        )
     }
 
     /// Constructs validated alignment requirements. Primarily useful for

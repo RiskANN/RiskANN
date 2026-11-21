@@ -21,6 +21,10 @@ pub use uring::{IoUringConfig, IoUringDiskStore};
 #[cfg(all(feature = "direct-io", target_os = "linux"))]
 pub mod direct_io;
 #[cfg(all(feature = "direct-io", target_os = "linux"))]
+pub mod buffered_direct;
+#[cfg(all(feature = "direct-io", target_os = "linux"))]
+pub use buffered_direct::DirectIoDiskStore;
+#[cfg(all(feature = "direct-io", target_os = "linux"))]
 pub use direct_io::{AlignedBuffer, DirectIoAlignment};
 
 #[cfg(all(feature = "direct-io", not(target_os = "linux")))]
