@@ -10,6 +10,10 @@ use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::os::fd::AsRawFd;
+#[cfg(all(feature = "direct-io", target_os = "linux"))]
+use std::os::unix::fs::OpenOptionsExt;
+#[cfg(all(feature = "direct-io", target_os = "linux"))]
+use crate::direct_io::{AlignedBuffer, DirectIoAlignment};
 use std::sync::Mutex;
 use io_uring::{opcode, squeue, types, IoUring};
 use std::path::Path;
@@ -152,7 +156,7 @@ fn submit_and_wait(ring: &mut IoUring, entry: squeue::Entry, context: &str) -> R
     Ok(result)
 }
 
-fn read_exact_at(
+fn buffered_read_exact_at(
     ring: &mut IoUring,
     file: &File,
     mut buf: &mut [u8],
@@ -182,7 +186,7 @@ fn read_exact_at(
     Ok(())
 }
 
-fn write_all_at(
+fn buffered_write_all_at(
     ring: &mut IoUring,
     file: &File,
     mut buf: &[u8],
@@ -212,6 +216,123 @@ fn write_all_at(
     Ok(())
 }
 
+#[cfg(all(feature = "direct-io", target_os = "linux"))]
+fn direct_read_exact_at(
+    ring: &mut IoUring,
+    file: &File,
+    out: &mut [u8],
+    offset: u64,
+    context: &str,
+) -> Result<(), StorageError> {
+    if out.is_empty() { return Ok(()); }
+    let alignment = DirectIoAlignment::discover(file)?;
+    let (aligned_offset, aligned_len) = alignment.aligned_range(offset, out.len())?;
+    let mut bounce = AlignedBuffer::new(aligned_len, alignment.memory())?;
+    let read_len = u32::try_from(aligned_len).map_err(|_| StorageError::Overflow("direct read length"))?;
+    let result = loop {
+        let entry = opcode::Read::new(types::Fd(file.as_raw_fd()), bounce.as_mut_ptr(), read_len)
+            .offset(aligned_offset).build();
+        let result = submit_and_wait(ring, entry, &format!("read {context}"))?;
+        if result < 0 {
+            let error = io::Error::from_raw_os_error(-result);
+            if error.kind() == io::ErrorKind::Interrupted { continue; }
+            return Err(io_err(format!("read {context}"))(error));
+        }
+        break result as usize;
+    };
+    let within = usize::try_from(offset - aligned_offset).map_err(|_| StorageError::Overflow("direct read offset"))?;
+    let end = within.checked_add(out.len()).ok_or(StorageError::Overflow("direct read range"))?;
+    if result < end {
+        return Err(io_err(format!("read {context}"))(io::Error::from(io::ErrorKind::UnexpectedEof)));
+    }
+    out.copy_from_slice(&bounce[within..end]);
+    Ok(())
+}
+
+#[cfg(all(feature = "direct-io", target_os = "linux"))]
+fn direct_write_all_at(
+    ring: &mut IoUring,
+    file: &File,
+    input: &[u8],
+    offset: u64,
+    context: &str,
+) -> Result<(), StorageError> {
+    if input.is_empty() { return Ok(()); }
+    let alignment = DirectIoAlignment::discover(file)?;
+    let (aligned_offset, aligned_len) = alignment.aligned_range(offset, input.len())?;
+    let original_len = file.metadata().map_err(io_err(format!("stat {context}")))?.len();
+    let logical_end = offset.checked_add(input.len() as u64).ok_or(StorageError::Overflow("direct write end"))?;
+    let final_len = original_len.max(logical_end);
+    let aligned_end = aligned_offset.checked_add(aligned_len as u64).ok_or(StorageError::Overflow("aligned write end"))?;
+    let mut bounce = AlignedBuffer::new(aligned_len, alignment.memory())?;
+
+    // Read/modify/write preserves bytes sharing the first or last aligned block.
+    let existing = usize::try_from(original_len.saturating_sub(aligned_offset))
+        .unwrap_or(usize::MAX).min(aligned_len);
+    if existing > 0 {
+        let read_len = u32::try_from(aligned_len).map_err(|_| StorageError::Overflow("direct read-before-write length"))?;
+        let result = loop {
+            let entry = opcode::Read::new(types::Fd(file.as_raw_fd()), bounce.as_mut_ptr(), read_len)
+                .offset(aligned_offset).build();
+            let result = submit_and_wait(ring, entry, &format!("read before write {context}"))?;
+            if result < 0 {
+                let error = io::Error::from_raw_os_error(-result);
+                if error.kind() == io::ErrorKind::Interrupted { continue; }
+                return Err(io_err(format!("read before write {context}"))(error));
+            }
+            break result as usize;
+        };
+        if result < existing {
+            return Err(io_err(format!("read before write {context}"))(io::Error::from(io::ErrorKind::UnexpectedEof)));
+        }
+    }
+    let within = usize::try_from(offset - aligned_offset).map_err(|_| StorageError::Overflow("direct write offset"))?;
+    let end = within.checked_add(input.len()).ok_or(StorageError::Overflow("direct write range"))?;
+    bounce[within..end].copy_from_slice(input);
+
+    if aligned_end > original_len {
+        file.set_len(aligned_end).map_err(io_err(format!("extend for O_DIRECT write {context}")))?;
+    }
+    let write_result = loop {
+        let write_len = u32::try_from(aligned_len).map_err(|_| StorageError::Overflow("direct write length"))?;
+        let entry = opcode::Write::new(types::Fd(file.as_raw_fd()), bounce.as_ptr(), write_len)
+            .offset(aligned_offset).build();
+        let result = submit_and_wait(ring, entry, &format!("write {context}"))?;
+        if result < 0 {
+            let error = io::Error::from_raw_os_error(-result);
+            if error.kind() == io::ErrorKind::Interrupted { continue; }
+            break Err(io_err(format!("write {context}"))(error));
+        }
+        if result as usize != aligned_len {
+            break Err(io_err(format!("write {context}"))(io::Error::new(io::ErrorKind::WriteZero, "partial O_DIRECT write")));
+        }
+        break Ok(());
+    };
+    if aligned_end > original_len {
+        let truncate = file.set_len(final_len).map_err(io_err(format!("restore logical length after O_DIRECT write {context}")));
+        match (write_result, truncate) {
+            (Err(e), _) => return Err(e),
+            (Ok(()), Err(e)) => return Err(e),
+            (Ok(()), Ok(())) => {}
+        }
+    } else { write_result?; }
+    Ok(())
+}
+
+fn read_exact_at(ring: &mut IoUring, file: &File, buf: &mut [u8], offset: u64, context: &str) -> Result<(), StorageError> {
+    #[cfg(all(feature = "direct-io", target_os = "linux"))]
+    { return direct_read_exact_at(ring, file, buf, offset, context); }
+    #[cfg(not(all(feature = "direct-io", target_os = "linux")))]
+    { buffered_read_exact_at(ring, file, buf, offset, context) }
+}
+
+fn write_all_at(ring: &mut IoUring, file: &File, buf: &[u8], offset: u64, context: &str) -> Result<(), StorageError> {
+    #[cfg(all(feature = "direct-io", target_os = "linux"))]
+    { return direct_write_all_at(ring, file, buf, offset, context); }
+    #[cfg(not(all(feature = "direct-io", target_os = "linux")))]
+    { buffered_write_all_at(ring, file, buf, offset, context) }
+}
+
 /// One positional operation in a batch. The pointed-to memory must remain
 /// valid and untouched until every completion for this batch has been reaped.
 struct BatchRequest {
@@ -234,6 +355,27 @@ fn submit_batch_once(
     debug_assert!(!requests.is_empty());
     debug_assert!(requests.len() <= queue_depth);
 
+    #[cfg(all(feature = "direct-io", target_os = "linux"))]
+    {
+        let mut results = Vec::with_capacity(requests.len());
+        for request in requests {
+            if is_write {
+                // SAFETY: The caller guarantees each request buffer remains valid
+                // and immutable until this function returns.
+                let bytes = unsafe { std::slice::from_raw_parts(request.ptr.cast_const(), request.len) };
+                direct_write_all_at(ring, file, bytes, request.offset, context)?;
+            } else {
+                // SAFETY: The caller guarantees each request buffer is writable
+                // and valid until this function returns.
+                let bytes = unsafe { std::slice::from_raw_parts_mut(request.ptr, request.len) };
+                direct_read_exact_at(ring, file, bytes, request.offset, context)?;
+            }
+            results.push(i32::try_from(request.len).map_err(|_| StorageError::Overflow("direct batch result"))?);
+        }
+        return Ok(results);
+    }
+
+    #[cfg(not(all(feature = "direct-io", target_os = "linux")))]
     for (index, request) in requests.iter().enumerate() {
         let len = u32::try_from(request.len)
             .map_err(|_| StorageError::Overflow("batch I/O length"))?;
@@ -315,6 +457,15 @@ fn lock_ring(ring: &Mutex<IoUring>) -> Result<std::sync::MutexGuard<'_, IoUring>
     })
 }
 
+fn open_storage_file(path: &Path, create_new: bool) -> Result<File, StorageError> {
+    let mut options = OpenOptions::new();
+    options.read(true).write(true);
+    if create_new { options.create_new(true); }
+    #[cfg(all(feature = "direct-io", target_os = "linux"))]
+    options.custom_flags(libc::O_DIRECT | libc::O_CLOEXEC);
+    options.open(path).map_err(io_err(format!("open {}", path.display())))
+}
+
 /// Fills a file range with a repeated byte using bounded-size writes.
 fn fill_file_range(ring: &mut IoUring, file: &File, start: u64, len: u64, byte: u8, context: &str) -> Result<(), StorageError> {
     const CHUNK: usize = 64 * 1024;
@@ -355,11 +506,9 @@ impl IoUringDiskStore {
         let vec_path = dir.join(VECTORS_FILE);
         let graph_path = dir.join(GRAPH_FILE);
 
-        let vec_file = OpenOptions::new().read(true).write(true).create_new(true)
-            .open(&vec_path).map_err(io_err(format!("create {}", vec_path.display())))?;
+        let vec_file = open_storage_file(&vec_path, true)?;
         vec_file.set_len(vec_len).map_err(io_err(format!("size {}", vec_path.display())))?;
-        let graph_file = OpenOptions::new().read(true).write(true).create_new(true)
-            .open(&graph_path).map_err(io_err(format!("create {}", graph_path.display())))?;
+        let graph_file = open_storage_file(&graph_path, true)?;
         graph_file.set_len(graph_len).map_err(io_err(format!("size {}", graph_path.display())))?;
         {
             let mut ring_guard = lock_ring(&ring)?;
@@ -389,10 +538,8 @@ impl IoUringDiskStore {
         let ring = Mutex::new(IoUring::new(entries).map_err(io_err("create io_uring instance".into()))?);
         let vec_path = dir.join(VECTORS_FILE);
         let graph_path = dir.join(GRAPH_FILE);
-        let vec_file = OpenOptions::new().read(true).write(true).open(&vec_path)
-            .map_err(io_err(format!("open {}", vec_path.display())))?;
-        let graph_file = OpenOptions::new().read(true).write(true).open(&graph_path)
-            .map_err(io_err(format!("open {}", graph_path.display())))?;
+        let vec_file = open_storage_file(&vec_path, false)?;
+        let graph_file = open_storage_file(&graph_path, false)?;
         let vec_len = vec_file.metadata().map_err(io_err(format!("stat {}", vec_path.display())))?.len();
         let graph_len = graph_file.metadata().map_err(io_err(format!("stat {}", graph_path.display())))?.len();
         let cap_v = capacity_from_len(vec_len, vec_stride, VECTORS_FILE)?;
