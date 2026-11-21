@@ -12,7 +12,7 @@ pub mod error;
 pub mod ingest;
 
 pub use collection::{
-    Collection, CollectionConfig, CollectionInfo, GraphNode, GraphSnapshot, QueryOptions,
+    Collection, CollectionConfig, CollectionInfo, EngineStore, GraphNode, GraphSnapshot, QueryOptions,
     QueryStats, SearchHit, SearchResponse, SearchTrace, UpsertOutcome, VectorRecord,
 };
 pub use db::{DBInfo, LoadReport};

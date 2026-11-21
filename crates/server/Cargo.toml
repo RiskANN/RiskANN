@@ -15,7 +15,7 @@ name = "server"
 path = "src/main.rs"
 
 [dependencies]
-engine = { path = "../engine" }
+engine = { path = "../engine", default-features = false }
 axum = "0.7"
 tokio = { workspace = true }
 serde = { workspace = true }
@@ -26,3 +26,10 @@ tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
+
+[features]
+default = ["mmap"]
+mmap = ["engine/mmap"]
+buffered = ["engine/buffered"]
+direct-io = ["engine/direct-io"]
+io-uring = ["engine/io-uring"]
