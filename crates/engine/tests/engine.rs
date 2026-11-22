@@ -7,7 +7,7 @@ use engine::ingest::{
     IngestMode, IngestOptions, IngestProgress, IngestRecord, IngestSummary, JobState, OnError,
     records_source, run_ingest_job,
 };
-use engine::{DBInfo, DistanceMetric, EngineError};
+use engine::{DBInfo, DistanceMetric, EngineError, EngineStore};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -554,7 +554,7 @@ fn dangling_edges_from_interrupted_writes_are_removed_on_open() {
     }
     {
         // Simulate a crash after a reverse edge to unpublished id 7 was written.
-        let (mut s, _) = storage::DiskStore::open_existing(&path, 2, 4, 3).unwrap();
+        let (mut s, _) = EngineStore::open_existing(&path, 2, 4, 3).unwrap();
         s.write_edges(0, &[1, 7]).unwrap();
         s.flush().unwrap();
     }

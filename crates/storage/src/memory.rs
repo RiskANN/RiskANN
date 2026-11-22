@@ -30,108 +30,13 @@
 use memmap2::MmapMut;
 use std::fmt;
 use std::fs::{File, OpenOptions};
-use std::io;
 use std::ops::Range;
 use std::path::Path;
 
-pub const VECTORS_FILE: &str = "vectors.bin";
-pub const GRAPH_FILE: &str = "graph.bin";
-/// Sentinel that terminates an adjacency list.
-pub const EMPTY_EDGE: u32 = u32::MAX;
-/// Largest supported capacity; `u32::MAX` is reserved for [`EMPTY_EDGE`].
-pub const MAX_CAPACITY: u32 = u32::MAX - 1;
+use crate::common::{io_err, OpenReport, StorageError, EMPTY_EDGE, GRAPH_FILE, MAX_CAPACITY, VECTORS_FILE};
 
 const F32_BYTES: usize = std::mem::size_of::<f32>();
 const U32_BYTES: usize = std::mem::size_of::<u32>();
-
-/// Typed storage errors. `Io` contexts may contain file paths; callers that
-/// face untrusted clients must log them rather than return them.
-#[derive(Debug)]
-pub enum StorageError {
-    Io {
-        context: String,
-        source: io::Error,
-    },
-    InvalidArgument(String),
-    OutOfBounds {
-        node_id: u32,
-        capacity: u32,
-    },
-    DimensionMismatch {
-        expected: usize,
-        got: usize,
-    },
-    NonFinite {
-        node_id: u32,
-    },
-    TooManyEdges {
-        count: usize,
-        max: usize,
-    },
-    InvalidEdge {
-        node_id: u32,
-        edge: u32,
-        reason: &'static str,
-    },
-    Corrupt(String),
-    Overflow(&'static str),
-}
-
-impl fmt::Display for StorageError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            StorageError::Io { context, source } => write!(f, "I/O error ({context}): {source}"),
-            StorageError::InvalidArgument(m) => write!(f, "invalid argument: {m}"),
-            StorageError::OutOfBounds { node_id, capacity } => {
-                write!(
-                    f,
-                    "node id {node_id} is out of bounds (capacity {capacity})"
-                )
-            }
-            StorageError::DimensionMismatch { expected, got } => {
-                write!(f, "vector has {got} components, expected {expected}")
-            }
-            StorageError::NonFinite { node_id } => {
-                write!(f, "vector for node {node_id} contains NaN or infinity")
-            }
-            StorageError::TooManyEdges { count, max } => {
-                write!(f, "{count} edges exceed the maximum degree {max}")
-            }
-            StorageError::InvalidEdge {
-                node_id,
-                edge,
-                reason,
-            } => {
-                write!(f, "invalid edge {node_id} -> {edge}: {reason}")
-            }
-            StorageError::Corrupt(m) => write!(f, "corrupt or inconsistent storage: {m}"),
-            StorageError::Overflow(what) => write!(f, "arithmetic overflow computing {what}"),
-        }
-    }
-}
-
-impl std::error::Error for StorageError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            StorageError::Io { source, .. } => Some(source),
-            _ => None,
-        }
-    }
-}
-
-fn io_err(context: String) -> impl FnOnce(io::Error) -> StorageError {
-    move |source| StorageError::Io { context, source }
-}
-
-/// Result of [`DiskStore::open_existing`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct OpenReport {
-    pub vectors_capacity: u32,
-    pub graph_capacity: u32,
-    /// The two files had different capacities (e.g. a crash during resize)
-    /// and the shorter one was grown to match. Nothing was truncated.
-    pub repaired: bool,
-}
 
 /// Creates a writable mapping of `file`.
 fn map_file(file: &File, context: &str) -> Result<MmapMut, StorageError> {
@@ -344,14 +249,16 @@ impl DiskStore {
             .len();
         let cap_v = capacity_from_len(vec_len, vec_stride, VECTORS_FILE)?;
         let cap_g = capacity_from_len(graph_len, graph_stride, GRAPH_FILE)?;
-        if cap_v < required_slots || cap_g < required_slots {
+        // A resize can be interrupted after one file has grown. Validate the
+        // metadata requirement against the larger on-disk capacity, then grow
+        // the shorter file to match it below.
+        let capacity = cap_v.max(cap_g);
+        if capacity < required_slots {
             return Err(StorageError::Corrupt(format!(
-                "metadata references {required_slots} vectors but {VECTORS_FILE} holds {cap_v} \
-                 slots and {GRAPH_FILE} holds {cap_g}"
+                "metadata references {required_slots} vectors but {VECTORS_FILE} holds {cap_v} slots and {GRAPH_FILE} holds {cap_g}"
             )));
         }
 
-        let capacity = cap_v.max(cap_g);
         let mut repaired = false;
         if cap_v < capacity {
             vec_file
@@ -862,7 +769,7 @@ mod tests {
             .unwrap()
             .set_len(8 * 8)
             .unwrap();
-        let (s, report) = DiskStore::open_existing(dir.path(), 2, 2, 4).unwrap();
+        let (s, report) = DiskStore::open_existing(dir.path(), 2, 2, 8).unwrap();
         assert!(report.repaired);
         assert_eq!(report.vectors_capacity, 8);
         assert_eq!(report.graph_capacity, 4);

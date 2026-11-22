@@ -58,7 +58,25 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::time::Instant;
-use storage::{DiskStore, MAX_CAPACITY, StorageError};
+use storage::{StorageBackend, MAX_CAPACITY, StorageError};
+
+#[cfg(feature = "mmap")]
+pub type EngineStore = storage::DiskStore;
+#[cfg(all(not(feature = "mmap"), feature = "buffered"))]
+pub type EngineStore = storage::BufferedDiskStore;
+#[cfg(all(not(feature = "mmap"), not(feature = "buffered"), feature = "direct-io", not(feature = "io-uring")))]
+pub type EngineStore = storage::DirectIoDiskStore;
+#[cfg(all(not(feature = "mmap"), not(feature = "buffered"), feature = "io-uring"))]
+pub type EngineStore = storage::IoUringDiskStore;
+
+#[cfg(any(
+    all(feature = "mmap", any(feature = "buffered", feature = "direct-io", feature = "io-uring")),
+    all(feature = "buffered", any(feature = "direct-io", feature = "io-uring")),
+    all(feature = "direct-io", feature = "io-uring", feature = "mmap")
+))]
+compile_error!("select exactly one storage backend; io-uring + direct-io is the combined backend");
+#[cfg(not(any(feature = "mmap", feature = "buffered", feature = "direct-io", feature = "io-uring")))]
+compile_error!("select a storage backend feature (mmap is the default)");
 
 pub const CONFIG_FILE: &str = "config.json";
 pub const METADATA_FILE: &str = "metadata.json";
@@ -172,7 +190,7 @@ struct MetadataFile {
 }
 
 struct IndexState {
-    store: DiskStore,
+    store: EngineStore,
     /// `external_ids[i]` is the external id of internal id `i`.
     external_ids: Vec<String>,
     id_map: HashMap<String, u32>,
@@ -399,25 +417,25 @@ fn access_err(id: u32, e: StorageError) -> SearchError {
 
 #[inline]
 fn dist_to(
-    store: &DiskStore,
+    store: &EngineStore,
     metric: DistanceMetric,
     id: u32,
     query: &[f32],
 ) -> Result<f32, SearchError> {
-    let v = store.read_vector(id).map_err(|e| access_err(id, e))?;
-    Ok(metric.calculate(v, query))
+    let v = store.read_vector_cow(id).map_err(|e| access_err(id, e))?;
+    Ok(metric.calculate(v.as_ref(), query))
 }
 
 #[inline]
 fn pair_dist(
-    store: &DiskStore,
+    store: &EngineStore,
     metric: DistanceMetric,
     a: u32,
     b: u32,
 ) -> Result<f32, SearchError> {
-    let va = store.read_vector(a).map_err(|e| access_err(a, e))?;
-    let vb = store.read_vector(b).map_err(|e| access_err(b, e))?;
-    Ok(metric.calculate(va, vb))
+    let va = store.read_vector_cow(a).map_err(|e| access_err(a, e))?;
+    let vb = store.read_vector_cow(b).map_err(|e| access_err(b, e))?;
+    Ok(metric.calculate(va.as_ref(), vb.as_ref()))
 }
 
 /// Decrements the active-ingestion counter on drop (also on panic).
@@ -502,7 +520,7 @@ impl Collection {
         config: &CollectionConfig,
         capacity: u32,
     ) -> Result<IndexState, EngineError> {
-        let store = DiskStore::create_new(dir, config.dim, config.r, capacity)?;
+        let store = <EngineStore as StorageBackend>::create_new(dir, config.dim, config.r, capacity)?;
         let state = IndexState {
             store,
             external_ids: Vec::new(),
@@ -598,7 +616,7 @@ impl Collection {
             }
         }
 
-        let (store, report) = DiskStore::open_existing(&dir, config.dim, config.r, count)?;
+        let (store, report) = <EngineStore as StorageBackend>::open_existing(&dir, config.dim, config.r, count)?;
         if report.repaired {
             tracing::warn!(
                 collection = %name,
@@ -777,7 +795,7 @@ impl Collection {
             .id_map
             .get(external_id)
             .ok_or_else(|| EngineError::VectorNotFound(external_id.to_string()))?;
-        let vector = state.store.read_vector(id)?.to_vec();
+        let vector = state.store.read_vector_cow(id)?.to_vec();
         Ok(VectorRecord {
             id: external_id.to_string(),
             internal_id: id,
@@ -844,7 +862,7 @@ impl Collection {
                 })?
                 .clone();
             let vector = if include_vectors {
-                Some(state.store.read_vector(c.id)?.to_vec())
+                Some(state.store.read_vector_cow(c.id)?.to_vec())
             } else {
                 None
             };
@@ -951,7 +969,7 @@ impl Collection {
         let metric = self.config.metric;
         let mut heap: BinaryHeap<Candidate> = BinaryHeap::with_capacity(k + 1);
         for id in 0..n {
-            let d = metric.calculate(state.store.read_vector(id)?, query);
+            let d = metric.calculate(state.store.read_vector_cow(id)?.as_ref(), query);
             if !d.is_finite() {
                 return Err(EngineError::Internal(format!(
                     "non-finite distance for node {id}"
@@ -1017,7 +1035,7 @@ impl Collection {
             nodes.push(GraphNode {
                 internal_id: id,
                 id: ext.clone(),
-                vector: state.store.read_vector(id)?.to_vec(),
+                vector: state.store.read_vector_cow(id)?.to_vec(),
             });
             for e in state.store.read_edges(id)? {
                 if e < m {
@@ -1168,12 +1186,12 @@ impl Collection {
                     if edges.len() <= r {
                         Some(edges)
                     } else {
-                        let base = store.read_vector(nb)?;
+                        let base = store.read_vector_cow(nb)?;
                         let mut pool = Vec::with_capacity(edges.len());
                         for &e in &edges {
                             pool.push(Candidate::new(
                                 e,
-                                metric.calculate(base, store.read_vector(e)?),
+                                metric.calculate(base.as_ref(), store.read_vector_cow(e)?.as_ref()),
                             ));
                         }
                         Some(robust_prune(nb, &pool, r, alpha, |a, b| {
@@ -1197,7 +1215,7 @@ impl Collection {
         let dim = self.config.dim;
         let mut sum = vec![0.0f64; dim];
         for id in 0..n {
-            for (s, &x) in sum.iter_mut().zip(state.store.read_vector(id)?) {
+            for (s, &x) in sum.iter_mut().zip(state.store.read_vector_cow(id)?.iter()) {
                 *s += x as f64;
             }
         }
@@ -1208,7 +1226,7 @@ impl Collection {
                 id,
                 self.config
                     .metric
-                    .calculate(&centroid, state.store.read_vector(id)?),
+                    .calculate(&centroid, state.store.read_vector_cow(id)?.as_ref()),
             );
             if c < best {
                 best = c;
@@ -1238,9 +1256,9 @@ impl Collection {
         let mut entries = vec![medoid];
         let mut nearest: Vec<f32> = Vec::with_capacity(n as usize);
         {
-            let base = state.store.read_vector(medoid)?;
+            let base = state.store.read_vector_cow(medoid)?;
             for id in 0..n {
-                nearest.push(metric.calculate(base, state.store.read_vector(id)?));
+                nearest.push(metric.calculate(base.as_ref(), state.store.read_vector_cow(id)?.as_ref()));
             }
         }
         while entries.len() < target {
@@ -1255,9 +1273,9 @@ impl Collection {
                 break; // every remaining vector duplicates an entry point
             }
             entries.push(next);
-            let v = state.store.read_vector(next)?;
+            let v = state.store.read_vector_cow(next)?;
             for (id, slot) in nearest.iter_mut().enumerate() {
-                let d = metric.calculate(v, state.store.read_vector(id as u32)?);
+                let d = metric.calculate(v.as_ref(), state.store.read_vector_cow(id as u32)?.as_ref());
                 if d < *slot {
                     *slot = d;
                 }
@@ -1518,7 +1536,7 @@ impl Collection {
                     "collection was deleted during ingestion".into(),
                 ));
             }
-            buf.copy_from_slice(state.store.read_vector(id)?);
+            buf.copy_from_slice(state.store.read_vector_cow(id)?.as_ref());
             self.link_node(state, id, &buf)?;
             let linked = progress.nodes_linked.fetch_add(1, Ordering::Relaxed) + 1;
             if linked % report_every == 0 {
